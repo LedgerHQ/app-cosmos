@@ -162,14 +162,6 @@ parser_error_t tx_display_set_query(uint16_t displayIdx, uint16_t *outStartToken
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define NUM_KEY_SUBSTITUTIONS 29
-#define NUM_VALUE_SUBSTITUTIONS 8
-
-typedef struct {
-    char str1[50];
-    char str2[50];
-} key_subst_t;
-
 static const key_subst_t key_substitutions[NUM_KEY_SUBSTITUTIONS] = {
         {"chain_id",                          "Chain ID"},
         {"account_number",                    "Account"},
@@ -226,17 +218,6 @@ static const key_subst_t key_substitutions[NUM_KEY_SUBSTITUTIONS] = {
 //        {"msgs/value/validator_address", "Validator"},      // duplicated
 };
 
-static const key_subst_t value_substitutions[NUM_VALUE_SUBSTITUTIONS] = {
-        {"cosmos-sdk/MsgSend",                     "Send"},
-        {"cosmos-sdk/MsgDelegate",                 "Delegate"},
-        {"cosmos-sdk/MsgUndelegate",               "Undelegate"},
-        {"cosmos-sdk/MsgBeginRedelegate",          "Redelegate"},
-        {"cosmos-sdk/MsgSubmitProposal",           "Propose"},
-        {"cosmos-sdk/MsgDeposit",                  "Deposit"},
-        {"cosmos-sdk/MsgVote",                     "Vote"},
-        {"cosmos-sdk/MsgWithdrawDelegationReward", "Withdraw Reward"},
-};
-
 void tx_display_make_friendly() {
     _indexRootFields();
 
@@ -246,15 +227,6 @@ void tx_display_make_friendly() {
             STRNCPY_S(parser_tx_obj.query.out_key,
                       key_substitutions[i].str2,
                       parser_tx_obj.query.out_key_len)
-            break;
-        }
-    }
-
-    for (int8_t i = 0; i < NUM_VALUE_SUBSTITUTIONS; i++) {
-        if (!strcmp(parser_tx_obj.query.out_val, value_substitutions[i].str1)) {
-            STRNCPY_S(parser_tx_obj.query.out_val,
-                      value_substitutions[i].str2,
-                      parser_tx_obj.query.out_val_len)
             break;
         }
     }

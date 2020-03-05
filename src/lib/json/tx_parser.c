@@ -50,6 +50,17 @@ __always_inline void strcat_chunk_s(char *dst, uint16_t dst_max, const char *src
 ///////////////////////////
 ///////////////////////////
 
+static const key_subst_t value_substitutions[NUM_VALUE_SUBSTITUTIONS] = {
+        {"cosmos-sdk/MsgSend",                     "Send"},
+        {"cosmos-sdk/MsgDelegate",                 "Delegate"},
+        {"cosmos-sdk/MsgUndelegate",               "Undelegate"},
+        {"cosmos-sdk/MsgBeginRedelegate",          "Redelegate"},
+        {"cosmos-sdk/MsgSubmitProposal",           "Propose"},
+        {"cosmos-sdk/MsgDeposit",                  "Deposit"},
+        {"cosmos-sdk/MsgVote",                     "Vote"},
+        {"cosmos-sdk/MsgWithdrawDelegationReward", "Withdraw Reward"},
+};
+
 parser_error_t tx_getToken(uint16_t token_index,
                            char *out_val, uint16_t out_val_len,
                            uint8_t pageIdx, uint8_t *pageCount) {
@@ -63,10 +74,22 @@ parser_error_t tx_getToken(uint16_t token_index,
         return parser_unexpected_buffer_end;
     }
 
+    const char* inValue = parser_tx_obj.tx + token_start;
+    uint16_t inLen = token_end - token_start;
+
+    for (int8_t i = 0; i < NUM_VALUE_SUBSTITUTIONS; i++) {
+        const char *substStr = value_substitutions[i].str1;
+        const uint16_t substStrLen = strlen(substStr);
+        if (inLen == substStrLen && !MEMCMP(inValue, substStr, substStrLen)) {
+            inValue = value_substitutions[i].str2;
+            inLen = strlen(value_substitutions[i].str2);
+            break;
+        }
+    }
+
     if (token_start < token_end) {
         pageStringExt(out_val, out_val_len,
-                      parser_tx_obj.tx + token_start,
-                      token_end - token_start,
+                      inValue, inLen,
                       pageIdx, pageCount);
     }
 

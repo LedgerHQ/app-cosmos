@@ -23,6 +23,14 @@
 extern "C" {
 #endif
 
+#define NUM_KEY_SUBSTITUTIONS 29
+#define NUM_VALUE_SUBSTITUTIONS 8
+
+typedef struct {
+    char str1[50];
+    char str2[50];
+} key_subst_t;
+
 extern parser_tx_t parser_tx_obj;
 
 parser_error_t parser_init(parser_context_t *ctx,
