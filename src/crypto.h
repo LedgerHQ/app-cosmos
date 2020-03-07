@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <zxmacros.h>
+#include "../deps/ledger-zxlib/include/zxmacros.h"
 #include "coin.h"
 
 #ifdef __cplusplus

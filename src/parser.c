@@ -20,8 +20,8 @@
 #include <zxtypes.h>
 #include "json/tx_parser.h"
 #include "json/tx_display.h"
-#include "lib/parser_impl.h"
-#include "view_internal.h"
+#include "parser_impl.h"
+#include "common/view_internal.h"
 #include "jsmn.h"
 #include "parser.h"
 

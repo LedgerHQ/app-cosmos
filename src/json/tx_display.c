@@ -17,7 +17,7 @@
 #include "tx_display.h"
 #include "tx_parser.h"
 #include "json/json_parser.h"
-#include "lib/parser_impl.h"
+#include "parser_impl.h"
 #include <zxmacros.h>
 
 #define NUM_REQUIRED_ROOT_PAGES 6
