@@ -13,31 +13,16 @@
 *  See the License for the specific language governing permissions and
 *  limitations under the License.
 ********************************************************************************/
-
 #pragma once
+#include <json/json.h>
+#include <fstream>
 
-#include "zxmacros.h"
-#include "coin.h"
+typedef struct {
+    std::string description;
+    std::string tx;
+    std::string parsingErr;
+    std::string validationErr;
+    std::vector<std::string> expected;
+} testcase_t;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#define BIP44_LEN_DEFAULT       5u
-#define MAX_BECH32_HRP_LEN      83u
-#define PK_LEN       33u
-
-extern uint32_t bip44Path[BIP44_LEN_DEFAULT];
-extern char *hrp;
-
-uint8_t extractHRP(uint32_t rx, uint32_t offset);
-
-void crypto_set_hrp(char *p);
-
-uint16_t crypto_fillAddress(uint8_t *buffer, uint16_t buffer_len);
-
-uint16_t crypto_sign(uint8_t *signature, uint16_t signatureMaxlen, const uint8_t *message, uint16_t messageLen);
-
-#ifdef __cplusplus
-}
-#endif
+std::vector<testcase_t> GetJsonTestCases(const std::string& filename);

@@ -1,7 +1,7 @@
 #*******************************************************************************
 #   Ledger App
+#   (c) 2018-2020 ZondaX GmbH
 #   (c) 2017 Ledger
-#   (c) 2018 ZondaX GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -142,7 +142,11 @@ LDLIBS   += -lm -lgcc -lc
 ##########################
 include $(BOLOS_SDK)/Makefile.glyphs
 
-APP_SOURCE_PATH += src deps/jsmn/src deps/ledger-zxlib/include deps/ledger-zxlib/src
+APP_SOURCE_PATH += $(MY_DIR)/src
+APP_SOURCE_PATH += $(MY_DIR)/../deps/ledger-zxlib/include
+APP_SOURCE_PATH += $(MY_DIR)/../deps/ledger-zxlib/src
+APP_SOURCE_PATH += $(MY_DIR)/../deps/jsmn/src
+
 SDK_SOURCE_PATH += lib_stusb lib_u2f lib_stusb_impl
 
 #SDK_SOURCE_PATH  += lib_blewbxx lib_blewbxx_impl
