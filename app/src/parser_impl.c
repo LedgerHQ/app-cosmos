@@ -15,7 +15,7 @@
 ********************************************************************************/
 
 #include "parser_impl.h"
-#include "json/tx_display.h"
+#include "tx_display.h"
 
 parser_tx_t parser_tx_obj;
 
@@ -97,6 +97,8 @@ const char *parser_getErrorDescription(parser_error_t err) {
             return "JSON Missing account number";
         case parser_json_missing_memo:
             return "JSON Missing memo";
+        case parser_json_unexpected_error:
+            return "JSON Unexpected error";
 
         default:
             return "Unrecognized error code";

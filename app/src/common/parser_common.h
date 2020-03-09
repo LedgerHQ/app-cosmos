@@ -22,6 +22,8 @@ extern "C" {
 #include <stdint.h>
 #include <stddef.h>
 
+#define FAIL_ON_ERROR(CALL) { parser_error_t __local_err = CALL; if (__local_err!=parser_ok) return __local_err; }
+
 typedef enum {
     parser_ok = 0,
     parser_no_data,
@@ -49,6 +51,7 @@ typedef enum {
     parser_json_missing_msgs,
     parser_json_missing_account_number,
     parser_json_missing_memo,
+    parser_json_unexpected_error,
 } parser_error_t;
 
 typedef struct {

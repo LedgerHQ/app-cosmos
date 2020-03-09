@@ -35,9 +35,9 @@ file(GLOB_RECURSE JSMN_SRC
 
 file(GLOB_RECURSE LIB_SRC
         app/src/json/json_parser.c
-        app/src/json/tx_parser.c
-        app/src/json/tx_display.c
-        app/src/json/tx_validate.c
+        app/src/tx_parser.c
+        app/src/tx_display.c
+        app/src/tx_validate.c
         app/src/parser.c
         app/src/parser_impl.c
         )

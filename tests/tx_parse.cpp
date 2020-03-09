@@ -16,9 +16,9 @@
 
 #include "gtest/gtest.h"
 #include <json/json_parser.h>
-#include <json/tx_display.h>
-#include <json/tx_parser.h>
-#include <parser.h>
+#include <tx_display.h>
+#include <tx_parser.h>
+#include <common/parser.h>
 #include "util/common.h"
 
 namespace {

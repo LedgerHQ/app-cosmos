@@ -23,9 +23,9 @@
 #include <array>
 #include <jsmn.h>
 #include <json/json_parser.h>
-#include <json/tx_display.h>
-#include <json/tx_validate.h>
-#include <parser.h>
+#include <tx_display.h>
+#include <tx_validate.h>
+#include <common/parser.h>
 #include "util/common.h"
 
 namespace {

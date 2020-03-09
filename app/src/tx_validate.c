@@ -15,7 +15,7 @@
 ********************************************************************************/
 
 #include <jsmn.h>
-#include <parser_common.h>
+#include <common/parser_common.h>
 #include "json/json_parser.h"
 
 const char whitespaces[] = {

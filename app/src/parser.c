@@ -16,20 +16,22 @@
 
 #include <stdio.h>
 #include <zxmacros.h>
-#include <json/tx_validate.h>
+#include <tx_validate.h>
 #include <zxtypes.h>
-#include "json/tx_parser.h"
-#include "json/tx_display.h"
+#include "tx_parser.h"
+#include "tx_display.h"
 #include "parser_impl.h"
 #include "common/view_internal.h"
 #include "jsmn.h"
-#include "parser.h"
+#include "common/parser.h"
 
 parser_error_t parser_parse(parser_context_t *ctx,
                             const uint8_t *data,
                             uint16_t dataLen) {
     parser_init(ctx, data, dataLen);
-    return _readTx(ctx, &parser_tx_obj);
+    FAIL_ON_ERROR(_readTx(ctx, &parser_tx_obj))
+
+    return parser_ok;
 }
 
 parser_error_t parser_validate(parser_context_t *ctx) {
@@ -46,10 +48,7 @@ parser_error_t parser_validate(parser_context_t *ctx) {
 
     for (uint8_t idx = 0; idx < numItems; idx++) {
         uint8_t pageCount;
-        err = parser_getItem(ctx, idx, tmpKey, sizeof(tmpKey), tmpVal, sizeof(tmpVal), 0, &pageCount);
-        if (err != parser_ok) {
-            return err;
-        }
+        FAIL_ON_ERROR(parser_getItem(ctx, idx, tmpKey, sizeof(tmpKey), tmpVal, sizeof(tmpVal), 0, &pageCount))
     }
 
     return parser_ok;

@@ -16,7 +16,7 @@
 
 #include <jsmn.h>
 #include <zxmacros.h>
-#include <parser_common.h>
+#include <common/parser_common.h>
 #include "json_parser.h"
 
 #define EQUALS(_P, _Q, _LEN) (MEMCMP( PIC(_P), PIC(_Q), (_LEN))==0)
@@ -36,13 +36,17 @@ parser_error_t json_parse(parsed_json_t *parsed_json, const char *buffer, uint16
         parsed_json->tokens,
         MAX_NUMBER_OF_TOKENS);
 
-    switch (num_tokens) {
-        case JSMN_ERROR_NOMEM:
-            return parser_json_too_many_tokens;
-        case JSMN_ERROR_INVAL:
-            return parser_unexpected_characters;
-        case JSMN_ERROR_PART:
-            return parser_json_incomplete_json;
+    if (num_tokens < 0) {
+        switch (num_tokens) {
+            case JSMN_ERROR_NOMEM:
+                return parser_json_too_many_tokens;
+            case JSMN_ERROR_INVAL:
+                return parser_unexpected_characters;
+            case JSMN_ERROR_PART:
+                return parser_json_incomplete_json;
+            default:
+                return parser_json_unexpected_error;
+        }
     }
 
     parsed_json->numberOfTokens = 0;

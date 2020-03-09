@@ -20,7 +20,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include "parser_common.h"
+#include "common/parser_common.h"
 
 #ifdef __cplusplus
 extern "C" {

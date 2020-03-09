@@ -19,7 +19,7 @@
 
 #include <iostream>
 #include <memory>
-#include "parser.h"
+#include "common/parser.h"
 #include "util/common.h"
 
 using ::testing::TestWithParam;

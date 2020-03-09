@@ -18,7 +18,7 @@
 
 #include "json/json_parser.h"
 #include <stdint.h>
-#include <parser_common.h>
+#include <common/parser_common.h>
 
 #ifdef __cplusplus
 extern "C" {

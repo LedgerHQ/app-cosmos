@@ -13,8 +13,8 @@
 *  See the License for the specific language governing permissions and
 *  limitations under the License.
 ********************************************************************************/
-#include <json/tx_display.h>
-#include <parser.h>
+#include <tx_display.h>
+#include <common/parser.h>
 #include <sstream>
 #include <string>
 #include "common.h"
