@@ -25,12 +25,64 @@
 #include "jsmn.h"
 #include "common/parser.h"
 
+__Z_INLINE parser_error_t parser_getItem_raw(parser_context_t *ctx,
+                                             int8_t displayIdx,
+                                             char *outKey, uint16_t outKeyLen,
+                                             char *outVal, uint16_t outValLen,
+                                             uint8_t pageIdx, uint8_t *pageCount);
+
+void parser_group_msgs_type(parser_context_t *ctx) {
+    uint8_t numItems = parser_getNumItems(ctx);
+    char tmpKey[40];
+    char tmpVal[40];
+    char tmpReference[40];
+    MEMZERO(tmpReference, sizeof(tmpReference));
+
+    // Search for msgs/type - if there are all the same flag and avoid repeating
+    for (uint8_t idx = 0; idx < numItems; idx++) {
+        uint8_t pageCount;
+
+        parser_error_t err = parser_getItem_raw(ctx, idx,
+                                                tmpKey, sizeof(tmpKey),
+                                                tmpVal, sizeof(tmpVal),
+                                                0, &pageCount);
+
+        if (err != parser_ok) {
+            // it is not possible to group when values go beyond a single page
+            return;
+        }
+
+        if (strcmp(tmpKey, "msgs/type") == 0) {
+            if (pageCount > 1) {
+                // it is not possible to group when values go beyond a single page
+                return;
+            }
+
+            parser_tx_obj.filter_msg_type_count++;
+            if (parser_tx_obj.filter_msg_type_count == 1) {
+                strcpy(tmpReference, tmpVal);
+                continue;
+            }
+
+            if (strcmp(tmpVal, tmpReference) != 0) {
+                // different values, so disable grouping
+                parser_tx_obj.filter_msg_type_count = 0;
+                return;
+            }
+        }
+    }
+
+    if (parser_tx_obj.filter_msg_type_count > 1) {
+        // enable msgs/type grouping
+    }
+}
+
 parser_error_t parser_parse(parser_context_t *ctx,
                             const uint8_t *data,
                             uint16_t dataLen) {
     parser_init(ctx, data, dataLen);
     FAIL_ON_ERROR(_readTx(ctx, &parser_tx_obj))
-
+    parser_group_msgs_type(ctx);
     return parser_ok;
 }
 
@@ -40,7 +92,6 @@ parser_error_t parser_validate(parser_context_t *ctx) {
         return err;
 
     // Iterate through all items to check that all can be shown and are valid
-
     uint8_t numItems = parser_getNumItems(ctx);
 
     char tmpKey[40];
@@ -55,6 +106,9 @@ parser_error_t parser_validate(parser_context_t *ctx) {
 }
 
 uint8_t parser_getNumItems(parser_context_t *ctx) {
+    if (parser_tx_obj.filter_msg_type_count > 1) {
+        return tx_display_numItems() - (parser_tx_obj.filter_msg_type_count - 1);
+    }
     return tx_display_numItems();
 }
 
@@ -152,11 +206,11 @@ __Z_INLINE parser_error_t parser_formatAmount(uint16_t amountToken,
     return parser_ok;
 }
 
-parser_error_t parser_getItem(parser_context_t *ctx,
-                              int8_t displayIdx,
-                              char *outKey, uint16_t outKeyLen,
-                              char *outVal, uint16_t outValLen,
-                              uint8_t pageIdx, uint8_t *pageCount) {
+__Z_INLINE parser_error_t parser_getItem_raw(parser_context_t *ctx,
+                                             int8_t displayIdx,
+                                             char *outKey, uint16_t outKeyLen,
+                                             char *outVal, uint16_t outValLen,
+                                             uint8_t pageIdx, uint8_t *pageCount) {
 
     MEMZERO(outKey, outKeyLen);
     MEMZERO(outVal, outValLen);
@@ -165,24 +219,41 @@ parser_error_t parser_getItem(parser_context_t *ctx,
     snprintf(outVal, outValLen, " ");
 
     uint16_t displayStartToken;
-    parser_error_t err = tx_display_set_query(displayIdx, &displayStartToken);
-    if (err != parser_ok)
-        return err;
+    FAIL_ON_ERROR(tx_display_set_query(displayIdx, &displayStartToken))
 
     STRNCPY_S(parser_tx_obj.query.out_key,
               get_required_root_item(parser_tx_obj.query.item_index_root),
               parser_tx_obj.query.out_key_len)
 
     uint16_t ret_value_token_index;
-    err = tx_traverse_find(displayStartToken, &ret_value_token_index);
-    if (err != parser_ok)
-        return err;
+    FAIL_ON_ERROR(tx_traverse_find(displayStartToken, &ret_value_token_index))
 
     if (parser_isAmount(parser_tx_obj.query.out_key)) {
-        err = parser_formatAmount(ret_value_token_index, outVal, outValLen, pageIdx, pageCount);
+        FAIL_ON_ERROR(parser_formatAmount(ret_value_token_index, outVal, outValLen, pageIdx, pageCount))
     } else {
-        err = tx_getToken(ret_value_token_index, outVal, outValLen, parser_tx_obj.query.chunk_index, pageCount);
+        FAIL_ON_ERROR(tx_getToken(ret_value_token_index, outVal, outValLen, parser_tx_obj.query.chunk_index, pageCount))
     }
+
+    return parser_ok;
+}
+
+parser_error_t parser_getItem(parser_context_t *ctx,
+                              int8_t displayIdx,
+                              char *outKey, uint16_t outKeyLen,
+                              char *outVal, uint16_t outValLen,
+                              uint8_t pageIdx, uint8_t *pageCount) {
+
+    if (displayIdx < 0 || displayIdx > parser_getNumItems(ctx)) {
+        return parser_display_idx_out_of_range;
+    }
+
+    FAIL_ON_ERROR(parser_getItem_raw(
+            ctx,
+            displayIdx,
+            outKey, outKeyLen,
+            outVal, outValLen,
+            pageIdx, pageCount)
+    )
 
     tx_display_make_friendly();
 
@@ -193,5 +264,5 @@ parser_error_t parser_getItem(parser_context_t *ctx,
         }
     }
 
-    return err;
+    return parser_ok;
 }

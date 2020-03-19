@@ -29,6 +29,9 @@ typedef struct {
     uint16_t item_index_root;
     uint8_t max_level;
     uint8_t max_depth;
+    struct {
+        unsigned int filter_msg_type:1;
+    } flags;
 
     char *out_key;
     int16_t out_key_len;
@@ -40,8 +43,12 @@ typedef struct {
 typedef struct {
     parsed_json_t json;
     const char *tx;
-    uint8_t cache_valid;
+    struct {
+        unsigned int cache_valid:1;
+    } flags;
+    uint8_t filter_msg_type_count;
     tx_query_t query;
+
 } parser_tx_t;
 
 #ifdef __cplusplus

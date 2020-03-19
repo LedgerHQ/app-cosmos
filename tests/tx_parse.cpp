@@ -38,7 +38,7 @@ namespace {
         auto transaction = R"({"keyA":"123456", "keyB":"abcdefg", "keyC":""})";
 
         parser_tx_obj.tx = transaction;
-        parser_tx_obj.cache_valid = false;
+        parser_tx_obj.flags.cache_valid = false;
         parser_error_t err = JSON_PARSE(&parser_tx_obj.json, parser_tx_obj.tx);
         ASSERT_EQ(err, parser_ok);
 
@@ -95,7 +95,7 @@ namespace {
         auto transaction = R"({"keyA":"123456", "keyB":"abcdefg"})";
 
         parser_tx_obj.tx = transaction;
-        parser_tx_obj.cache_valid = false;
+        parser_tx_obj.flags.cache_valid = false;
         parser_error_t err = JSON_PARSE(&parser_tx_obj.json, parser_tx_obj.tx);
         ASSERT_EQ(err, parser_ok);
 
@@ -118,7 +118,7 @@ namespace {
         auto transaction = R"({"account_number":"0"})";
 
         parser_tx_obj.tx = transaction;
-        parser_tx_obj.cache_valid = false;
+        parser_tx_obj.flags.cache_valid = false;
         parser_error_t err = JSON_PARSE(&parser_tx_obj.json, parser_tx_obj.tx);
         EXPECT_EQ(err, parser_ok);
 
@@ -131,7 +131,7 @@ namespace {
         auto transaction = R"({"account_number":"0","chain_id":"test-chain-1","fee":{"amount":[{"amount":"5","denom":"photon"}],"gas":"10000"},"memo":"testmemo","msgs":[{"inputs":[{"address":"cosmosaccaddr1d9h8qat5e4ehc5","coins":[{"amount":"10","denom":"atom"}]}],"outputs":[{"address":"cosmosaccaddr1da6hgur4wse3jx32","coins":[{"amount":"10","denom":"atom"}]}]}],"sequence":"1"})";
 
         parser_tx_obj.tx = transaction;
-        parser_tx_obj.cache_valid = false;
+        parser_tx_obj.flags.cache_valid = false;
         parser_error_t err = JSON_PARSE(&parser_tx_obj.json, parser_tx_obj.tx);
         EXPECT_EQ(err, parser_ok);
 
@@ -144,7 +144,7 @@ namespace {
                 R"({"account_number":"0","chain_id":"test-chain-1","fee":{"amount":[{"amount":"5","denom":"photon"}],"gas":"10000"},"memo":"testmemo","msgs":[{"inputs":[{"address":"cosmosaccaddr1d9h8qat5e4ehc5","coins":[{"amount":"10","denom":"atom"}]}],"outputs":[{"address":"cosmosaccaddr1da6hgur4wse3jx32","coins":[{"amount":"10","denom":"atom"}]}]},{"inputs":[{"address":"cosmosaccaddr1d9h8qat5e4ehc5","coins":[{"amount":"10","denom":"atom"}]}],"outputs":[{"address":"cosmosaccaddr1da6hgur4wse3jx32","coins":[{"amount":"10","denom":"atom"}]}]},{"inputs":[{"address":"cosmosaccaddr1d9h8qat5e4ehc5","coins":[{"amount":"10","denom":"atom"}]}],"outputs":[{"address":"cosmosaccaddr1da6hgur4wse3jx32","coins":[{"amount":"10","denom":"atom"}]}]},{"inputs":[{"address":"cosmosaccaddr1d9h8qat5e4ehc5","coins":[{"amount":"10","denom":"atom"}]}],"outputs":[{"address":"cosmosaccaddr1da6hgur4wse3jx32","coins":[{"amount":"10","denom":"atom"}]}]}],"sequence":"1"})";
 
         parser_tx_obj.tx = transaction;
-        parser_tx_obj.cache_valid = false;
+        parser_tx_obj.flags.cache_valid = false;
         parser_error_t err = JSON_PARSE(&parser_tx_obj.json, parser_tx_obj.tx);
         EXPECT_EQ(err, parser_ok);
 

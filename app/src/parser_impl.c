@@ -16,6 +16,7 @@
 
 #include "parser_impl.h"
 #include "tx_display.h"
+#include "parser_txdef.h"
 
 parser_tx_t parser_tx_obj;
 
@@ -113,7 +114,8 @@ parser_error_t _readTx(parser_context_t *c, parser_tx_t *v) {
     }
 
     parser_tx_obj.tx = (const char *) c->buffer;
-    parser_tx_obj.cache_valid = 0;
+    parser_tx_obj.flags.cache_valid = 0;
+    parser_tx_obj.filter_msg_type_count = 0;
 
     return parser_ok;
 }

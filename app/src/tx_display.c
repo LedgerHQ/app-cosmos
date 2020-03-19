@@ -59,8 +59,8 @@ typedef struct {
 
 display_cache_t display_cache;
 
-void _indexRootFields() {
-    if (parser_tx_obj.cache_valid) {
+void tx_indexRootFields() {
+    if (parser_tx_obj.flags.cache_valid) {
         return;
     }
 
@@ -111,17 +111,17 @@ void _indexRootFields() {
         }
     }
 
-    parser_tx_obj.cache_valid = 1;
+    parser_tx_obj.flags.cache_valid = 1;
 }
 
 int16_t tx_display_numItems() {
-    _indexRootFields();
+    tx_indexRootFields();
     return display_cache.numItems;
 }
 
 // This function assumes that the tx_ctx has been set properly
 parser_error_t tx_display_set_query(uint16_t displayIdx, uint16_t *outStartToken) {
-    _indexRootFields();
+    tx_indexRootFields();
 
     if (displayIdx < 0 || displayIdx >= display_cache.numItems) {
         return parser_display_idx_out_of_range;
@@ -219,7 +219,7 @@ static const key_subst_t key_substitutions[NUM_KEY_SUBSTITUTIONS] = {
 };
 
 void tx_display_make_friendly() {
-    _indexRootFields();
+    tx_indexRootFields();
 
     // post process keys
     for (int8_t i = 0; i < NUM_KEY_SUBSTITUTIONS; i++) {
