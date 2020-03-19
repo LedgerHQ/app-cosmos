@@ -53,7 +53,9 @@ static const uint16_t root_max_level[NUM_REQUIRED_ROOT_PAGES] = {
 
 typedef struct {
     int16_t numItems;
+    // token where the subitem starts
     int16_t subroot_start_token[NUM_REQUIRED_ROOT_PAGES];
+    // Number of subitems below the root item
     uint8_t num_subpages[NUM_REQUIRED_ROOT_PAGES];
 } display_cache_t;
 
@@ -130,6 +132,8 @@ parser_error_t tx_display_set_query(uint16_t displayIdx, uint16_t *outStartToken
     parser_tx_obj.query.item_index = 0;
     uint16_t root_index = 0;
 
+    // Find root index | display idx -> item_index
+    // consume indexed subpages until we get the item index in the subpage
     for (uint16_t i = 0; i < displayIdx; i++) {
         parser_tx_obj.query.item_index++;
         if (parser_tx_obj.query.item_index >= display_cache.num_subpages[root_index]) {

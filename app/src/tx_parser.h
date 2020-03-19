@@ -27,20 +27,18 @@ extern "C" {
 #define MAX_RECURSION_DEPTH  6
 
 #define INIT_QUERY_CONTEXT(_KEY, _KEY_LEN, _VAL, _VAL_LEN, _CHUNK_IDX, _MAX_LEVEL) \
-    INIT_QUERY(_KEY, _KEY_LEN, _VAL, _VAL_LEN, _CHUNK_IDX) \
+    _KEY[0] = 0; \
+    _VAL[0] = 0; \
+    parser_tx_obj.query.flags.filter_msg_type = 0; \
+    parser_tx_obj.query.out_key=_KEY; \
+    parser_tx_obj.query.out_val=_VAL; \
+    parser_tx_obj.query.out_key_len = _KEY_LEN; \
+    parser_tx_obj.query.out_val_len = _VAL_LEN; \
+    parser_tx_obj.query.item_index= 0; \
+    parser_tx_obj.query.chunk_index = _CHUNK_IDX; \
     parser_tx_obj.query.item_index_current = 0; \
     parser_tx_obj.query.max_depth = MAX_RECURSION_DEPTH; \
     parser_tx_obj.query.max_level = _MAX_LEVEL;
-
-#define INIT_QUERY(_KEY, _KEY_LEN, _VAL, _VAL_LEN, _CHUNK_IDX)  \
-        _KEY[0] = 0; \
-        _VAL[0] = 0; \
-        parser_tx_obj.query.out_key=_KEY; \
-        parser_tx_obj.query.out_val=_VAL; \
-        parser_tx_obj.query.out_key_len = _KEY_LEN; \
-        parser_tx_obj.query.out_val_len = _VAL_LEN; \
-        parser_tx_obj.query.item_index= 0; \
-        parser_tx_obj.query.chunk_index = _CHUNK_IDX;
 
 parser_error_t tx_traverse_find(int16_t root_token_index, uint16_t *ret_value_token_index);
 

@@ -211,12 +211,20 @@ __Z_INLINE parser_error_t parser_getItem_raw(parser_context_t *ctx,
                                              char *outKey, uint16_t outKeyLen,
                                              char *outVal, uint16_t outValLen,
                                              uint8_t pageIdx, uint8_t *pageCount) {
-
+    // Init query
     MEMZERO(outKey, outKeyLen);
     MEMZERO(outVal, outValLen);
-    INIT_QUERY(outKey, outKeyLen, outVal, outValLen, pageIdx)
+    parser_tx_obj.query.out_key=outKey;
+    parser_tx_obj.query.out_val=outVal;
+    parser_tx_obj.query.out_key_len = outKeyLen;
+    parser_tx_obj.query.out_val_len = outValLen;
+    parser_tx_obj.query.item_index= 0;
+    parser_tx_obj.query.chunk_index = pageIdx;
+    ///
+    parser_tx_obj.query.flags.filter_msg_type = 0;
     snprintf(outKey, outKeyLen, "?");
     snprintf(outVal, outValLen, " ");
+    ////
 
     uint16_t displayStartToken;
     FAIL_ON_ERROR(tx_display_set_query(displayIdx, &displayStartToken))
