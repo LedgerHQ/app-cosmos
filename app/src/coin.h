@@ -28,6 +28,16 @@ extern "C" {
 #define HDPATH_3_DEFAULT     (0)
 #define HDPATH_4_DEFAULT     (0)
 
+#define MENU_MAIN_APP_LINE1 "Cosmos"
+
+#ifdef TESTING_ENABLED
+#define MENU_MAIN_APP_LINE2 "Cosmos TEST!"
+#else
+#define MENU_MAIN_APP_LINE2 "App"
+#endif
+
+#define VIEW_ADDRESS_BUFFER_OFFSET    (PK_LEN)
+
 #ifdef __cplusplus
 }
 #endif

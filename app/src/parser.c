@@ -21,7 +21,7 @@
 #include "tx_parser.h"
 #include "tx_display.h"
 #include "parser_impl.h"
-#include "common/view_internal.h"
+#include "view_internal.h"
 #include "jsmn.h"
 #include "common/parser.h"
 

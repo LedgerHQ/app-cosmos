@@ -159,6 +159,9 @@ include $(BOLOS_SDK)/Makefile.rules
 #add dependency on custom makefile filename
 dep/%.d: %.c Makefile
 
+rust:
+	# Do nothing
+
 # load, delete and listvariants are provided to comply with Ledger requirements
 load:
 	python -m ledgerblue.loadApp $(APP_LOAD_PARAMS)
