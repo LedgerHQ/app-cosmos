@@ -1,5 +1,5 @@
 /*******************************************************************************
-*  (c) 2019 ZondaX GmbH
+*   (c) 2020 ZondaX GmbH
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -13,20 +13,28 @@
 *  See the License for the specific language governing permissions and
 *  limitations under the License.
 ********************************************************************************/
-#pragma once
+
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <stdint.h>
-#include <stddef.h>
+typedef enum {
+    no_error = 0,
+    invalid_derPrefix,
+    invalid_payloadLen,
+    invalid_rmaker,
+    invalid_rLen,
+    invalid_smarker,
+    invalid_sLen,
+} err_convert_e;
 
-#define HDPATH_0_DEFAULT     (0x80000000 | 0x2c)
-#define HDPATH_1_DEFAULT     (0x80000000 | 0x76)
-#define HDPATH_2_DEFAULT     (0x80000000 | 0)
-#define HDPATH_3_DEFAULT     (0)
-#define HDPATH_4_DEFAULT     (0)
+err_convert_e convertDERtoRSV(const uint8_t *inSignatureDER,
+                              unsigned int inInfo,
+                              uint8_t *outR,
+                              uint8_t *outS,
+                              uint8_t *outV);
 
 #ifdef __cplusplus
 }

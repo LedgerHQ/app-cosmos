@@ -54,8 +54,13 @@ void h_sign_accept(unsigned int _) {
     view_idle_show(0);
     UX_WAIT();
 
-    set_code(G_io_apdu_buffer, replyLen, APDU_CODE_OK);
-    io_exchange(CHANNEL_APDU | IO_RETURN_AFTER_TX, replyLen + 2);
+    if (replyLen > 0) {
+        set_code(G_io_apdu_buffer, replyLen, APDU_CODE_OK);
+        io_exchange(CHANNEL_APDU | IO_RETURN_AFTER_TX, replyLen + 2);
+    } else {
+        set_code(G_io_apdu_buffer, 0, APDU_CODE_SIGN_VERIFY_ERROR);
+        io_exchange(CHANNEL_APDU | IO_RETURN_AFTER_TX, 2);
+    }
 }
 
 void h_sign_reject(unsigned int _) {
@@ -122,7 +127,7 @@ view_error_t h_addr_update_item(uint8_t idx) {
             snprintf(viewdata.addr, MAX_CHARS_ADDR, "%s", (char *) (G_io_apdu_buffer + PK_LEN));
             break;
         case 1:
-            bip44_to_str(viewdata.addr, MAX_CHARS_ADDR, bip44Path);
+            bip44_to_str(viewdata.addr, MAX_CHARS_ADDR, hdPath);
             break;
     }
     return view_no_error;

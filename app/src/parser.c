@@ -25,7 +25,7 @@
 #include "jsmn.h"
 #include "common/parser.h"
 
-__Z_INLINE parser_error_t parser_getItem_raw(parser_context_t *ctx,
+__Z_INLINE parser_error_t parser_getItem_raw(const parser_context_t *ctx,
                                              int8_t displayIdx,
                                              char *outKey, uint16_t outKeyLen,
                                              char *outVal, uint16_t outValLen,
@@ -81,12 +81,12 @@ parser_error_t parser_parse(parser_context_t *ctx,
                             const uint8_t *data,
                             uint16_t dataLen) {
     parser_init(ctx, data, dataLen);
-    FAIL_ON_ERROR(_readTx(ctx, &parser_tx_obj))
+    CHECK_PARSER_ERR(_readTx(ctx, &parser_tx_obj))
     parser_group_msgs_type(ctx);
     return parser_ok;
 }
 
-parser_error_t parser_validate(parser_context_t *ctx) {
+parser_error_t parser_validate(const parser_context_t *ctx) {
     parser_error_t err = tx_validate(&parser_tx_obj.json);
     if (err != parser_ok)
         return err;
@@ -99,13 +99,13 @@ parser_error_t parser_validate(parser_context_t *ctx) {
 
     for (uint8_t idx = 0; idx < numItems; idx++) {
         uint8_t pageCount;
-        FAIL_ON_ERROR(parser_getItem(ctx, idx, tmpKey, sizeof(tmpKey), tmpVal, sizeof(tmpVal), 0, &pageCount))
+        CHECK_PARSER_ERR(parser_getItem(ctx, idx, tmpKey, sizeof(tmpKey), tmpVal, sizeof(tmpVal), 0, &pageCount))
     }
 
     return parser_ok;
 }
 
-uint8_t parser_getNumItems(parser_context_t *ctx) {
+uint8_t parser_getNumItems(const parser_context_t *ctx) {
     if (parser_tx_obj.filter_msg_type_count > 1) {
         return tx_display_numItems() - (parser_tx_obj.filter_msg_type_count - 1);
     }
@@ -206,7 +206,7 @@ __Z_INLINE parser_error_t parser_formatAmount(uint16_t amountToken,
     return parser_ok;
 }
 
-__Z_INLINE parser_error_t parser_getItem_raw(parser_context_t *ctx,
+__Z_INLINE parser_error_t parser_getItem_raw(const parser_context_t *ctx,
                                              int8_t displayIdx,
                                              char *outKey, uint16_t outKeyLen,
                                              char *outVal, uint16_t outValLen,
@@ -227,25 +227,25 @@ __Z_INLINE parser_error_t parser_getItem_raw(parser_context_t *ctx,
     ////
 
     uint16_t displayStartToken;
-    FAIL_ON_ERROR(tx_display_set_query(displayIdx, &displayStartToken))
+    CHECK_PARSER_ERR(tx_display_set_query(displayIdx, &displayStartToken))
 
     STRNCPY_S(parser_tx_obj.query.out_key,
               get_required_root_item(parser_tx_obj.query.item_index_root),
               parser_tx_obj.query.out_key_len)
 
     uint16_t ret_value_token_index;
-    FAIL_ON_ERROR(tx_traverse_find(displayStartToken, &ret_value_token_index))
+    CHECK_PARSER_ERR(tx_traverse_find(displayStartToken, &ret_value_token_index))
 
     if (parser_isAmount(parser_tx_obj.query.out_key)) {
-        FAIL_ON_ERROR(parser_formatAmount(ret_value_token_index, outVal, outValLen, pageIdx, pageCount))
+        CHECK_PARSER_ERR(parser_formatAmount(ret_value_token_index, outVal, outValLen, pageIdx, pageCount))
     } else {
-        FAIL_ON_ERROR(tx_getToken(ret_value_token_index, outVal, outValLen, parser_tx_obj.query.chunk_index, pageCount))
+        CHECK_PARSER_ERR(tx_getToken(ret_value_token_index, outVal, outValLen, parser_tx_obj.query.chunk_index, pageCount))
     }
 
     return parser_ok;
 }
 
-parser_error_t parser_getItem(parser_context_t *ctx,
+parser_error_t parser_getItem(const parser_context_t *ctx,
                               int8_t displayIdx,
                               char *outKey, uint16_t outKeyLen,
                               char *outVal, uint16_t outValLen,
@@ -255,7 +255,7 @@ parser_error_t parser_getItem(parser_context_t *ctx,
         return parser_display_idx_out_of_range;
     }
 
-    FAIL_ON_ERROR(parser_getItem_raw(
+    CHECK_PARSER_ERR(parser_getItem_raw(
             ctx,
             displayIdx,
             outKey, outKeyLen,

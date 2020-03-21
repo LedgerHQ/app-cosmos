@@ -15,7 +15,9 @@
 ********************************************************************************/
 
 #pragma once
+
 #include "inttypes.h"
+#include "zxmacros.h"
 
 // Based on ISO7816
 
@@ -41,8 +43,7 @@
 #define APDU_CODE_SIGN_VERIFY_ERROR         0x6F01
 
 
-inline void set_code(uint8_t *buffer, uint8_t offset, uint16_t value)
-{
-    *(buffer + offset) = (uint8_t)(value >> 8);
-    *(buffer + offset + 1) = (uint8_t)(value & 0xFF);
+__Z_INLINE void set_code(uint8_t *buffer, uint8_t offset, uint16_t value) {
+    *(buffer + offset) = (uint8_t) (value >> 8);
+    *(buffer + offset + 1) = (uint8_t) (value & 0xFF);
 }

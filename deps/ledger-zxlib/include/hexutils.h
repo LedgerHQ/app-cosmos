@@ -23,7 +23,7 @@
 extern "C" {
 #endif
 
-size_t parseHexString(const char *s, uint8_t *out);
+size_t parseHexString(uint8_t *out, uint16_t outLen, const char *input);
 
 #ifdef __cplusplus
 }

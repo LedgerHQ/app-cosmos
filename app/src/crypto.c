@@ -16,40 +16,38 @@
 
 #include "crypto.h"
 #include "coin.h"
+#include "zxmacros.h"
+#include "apdu_codes.h"
 
 #include <bech32.h>
-#include "apdu_codes.h"
-#include "zxmacros.h"
 
-uint32_t bip44Path[BIP44_LEN_DEFAULT];
+uint32_t hdPath[HDPATH_LEN_DEFAULT];
+
 uint8_t bech32_hrp_len;
 char bech32_hrp[MAX_BECH32_HRP_LEN + 1];
-
-#if defined(TARGET_NANOS)
-#define SAFE_HEARTBEAT(X)  io_seproxyhal_io_heartbeat(); X; io_seproxyhal_io_heartbeat();
-#endif
-
-#if defined(TARGET_NANOX)
-#define SAFE_HEARTBEAT(X)  X;
-#endif
 
 #if defined(TARGET_NANOS) || defined(TARGET_NANOX)
 #include "cx.h"
 
-void crypto_extractPublicKey(uint32_t bip44Path[BIP44_LEN_DEFAULT], uint8_t *pubKey){
+void crypto_extractPublicKey(const uint32_t path[HDPATH_LEN_DEFAULT], uint8_t *pubKey, uint16_t pubKeyLen) {
     cx_ecfp_public_key_t cx_publicKey;
     cx_ecfp_private_key_t cx_privateKey;
     uint8_t privateKeyData[32];
 
+    if (pubKeyLen < PK_LEN) {
+        return;
+    }
+
     BEGIN_TRY
     {
         TRY {
+            // Generate keys
             SAFE_HEARTBEAT(os_perso_derive_node_bip32(CX_CURVE_256K1,
-                                                      bip44Path,
-                                                      BIP44_LEN_DEFAULT,
-                                                      privateKeyData, NULL));
+                                                      path,
+                                                      HDPATH_LEN_DEFAULT,
+                                                      privateKeyData,
+                                                      NULL));
 
-            //////////////////////
             SAFE_HEARTBEAT(cx_ecfp_init_private_key(CX_CURVE_256K1, privateKeyData, 32, &cx_privateKey));
             SAFE_HEARTBEAT(cx_ecfp_init_public_key(CX_CURVE_256K1, NULL, 0, &cx_publicKey));
             SAFE_HEARTBEAT(cx_ecfp_generate_pair(CX_CURVE_256K1, &cx_publicKey, &cx_privateKey, 1));
@@ -70,35 +68,41 @@ void crypto_extractPublicKey(uint32_t bip44Path[BIP44_LEN_DEFAULT], uint8_t *pub
         pubKey[31] |= 0x80;
     }
     //////////////////////
-    memcpy(pubKey, cx_publicKey.W, PK_LEN);
+    MEMCPY(pubKey, cx_publicKey.W, PK_LEN);
 }
 
-uint16_t crypto_sign(uint8_t *signature, uint16_t signatureMaxlen, const uint8_t *message, uint16_t messageLen) {
-    uint8_t message_digest[CX_SHA256_SIZE];
-    SAFE_HEARTBEAT(cx_hash_sha256(message, messageLen, message_digest, CX_SHA256_SIZE));
+uint16_t crypto_sign(uint8_t *signature,
+                     uint16_t signatureMaxlen,
+                     const uint8_t *message,
+                     uint16_t messageLen) {
+    uint8_t messageDigest[CX_SHA256_SIZE];
+
+    // Hash it
+    SAFE_HEARTBEAT(cx_hash_sha256(message, messageLen, messageDigest, CX_SHA256_SIZE));
 
     cx_ecfp_private_key_t cx_privateKey;
     uint8_t privateKeyData[32];
     int signatureLength;
+    unsigned int info = 0;
+
     BEGIN_TRY
     {
         TRY
         {
             // Generate keys
             SAFE_HEARTBEAT(os_perso_derive_node_bip32(CX_CURVE_256K1,
-                                                      bip44Path,
-                                                      BIP44_LEN_DEFAULT,
+                                                      hdPath,
+                                                      HDPATH_LEN_DEFAULT,
                                                       privateKeyData, NULL));
 
             SAFE_HEARTBEAT(cx_ecfp_init_private_key(CX_CURVE_256K1, privateKeyData, 32, &cx_privateKey));
 
             // Sign
-            unsigned int info = 0;
             SAFE_HEARTBEAT(
                 signatureLength = cx_ecdsa_sign(&cx_privateKey,
                                                 CX_RND_RFC6979 | CX_LAST,
                                                 CX_SHA256,
-                                                message_digest,
+                                                messageDigest,
                                                 CX_SHA256_SIZE,
                                                 signature,
                                                 signatureMaxlen,
@@ -113,11 +117,16 @@ uint16_t crypto_sign(uint8_t *signature, uint16_t signatureMaxlen, const uint8_t
 
     return signatureLength;
 }
+
 #else
 
-void crypto_extractPublicKey(uint32_t path[BIP32_LEN_DEFAULT], uint8_t *pubKey) {
+void crypto_extractPublicKey(const uint32_t path[HDPATH_LEN_DEFAULT], uint8_t *pubKey, uint16_t pubKeyLen) {
+    ///////////////////////////////////////
+    // THIS IS ONLY USED FOR TEST PURPOSES
+    ///////////////////////////////////////
+
     // Empty version for non-Ledger devices
-    MEMZERO(pubKey, 32);
+    MEMZERO(pubKey, pubKeyLen);
 }
 
 uint16_t crypto_sign(uint8_t *signature,
@@ -167,7 +176,7 @@ uint16_t crypto_fillAddress(uint8_t *buffer, uint16_t buffer_len) {
     }
 
     // extract pubkey
-    crypto_extractPublicKey(bip44Path, buffer);
+    crypto_extractPublicKey(hdPath, buffer, buffer_len);
 
     // Hash it
     uint8_t hashed1_pk[CX_SHA256_SIZE];

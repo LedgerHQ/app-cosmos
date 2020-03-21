@@ -22,24 +22,33 @@ extern "C" {
 #include <stdint.h>
 #include <stddef.h>
 
-#define FAIL_ON_ERROR(CALL) { parser_error_t __local_err = CALL; if (__local_err!=parser_ok) return __local_err; }
+#define CHECK_PARSER_ERR(CALL) { \
+    parser_error_t err = CALL;  \
+    if (err!=parser_ok) return err;}
 
 typedef enum {
+    // Generic errors
     parser_ok = 0,
     parser_no_data,
     parser_init_context_empty,
+    parser_display_idx_out_of_range,
+    parser_display_page_out_of_range,
+    parser_unexepected_error,
+    // Coin generic
+    parser_unexpected_type,
+    parser_unexpected_method,
     parser_unexpected_buffer_end,
+    parser_unexpected_value,
+    parser_unexpected_number_items,
     parser_unexpected_version,
     parser_unexpected_characters,
     parser_unexpected_field,
     parser_duplicated_field,
     parser_value_out_of_range,
+    parser_invalid_address,
     parser_unexpected_chain,
     parser_query_no_results,
-    /////
-    parser_display_idx_out_of_range,
-    parser_display_page_out_of_range,
-    ////
+    // Coin Specific
     parser_json_zero_tokens,
     parser_json_too_many_tokens,    // "NOMEM: JSON string contains too many tokens"
     parser_json_incomplete_json,    // "JSON string is not complete";

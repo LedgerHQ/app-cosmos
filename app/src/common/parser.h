@@ -21,6 +21,8 @@ extern "C" {
 #endif
 
 #include "parser_impl.h"
+#include "hexutils.h"
+#include "crypto.h"
 
 const char *parser_getErrorDescription(parser_error_t err);
 
@@ -30,13 +32,13 @@ parser_error_t parser_parse(parser_context_t *ctx,
                             uint16_t dataLen);
 
 //// verifies tx fields
-parser_error_t parser_validate(parser_context_t *ctx);
+parser_error_t parser_validate(const parser_context_t *ctx);
 
 //// returns the number of items in the current parsing context
-uint8_t parser_getNumItems(parser_context_t *ctx);
+uint8_t parser_getNumItems(const parser_context_t *ctx);
 
 // retrieves a readable output for each field / page
-parser_error_t parser_getItem(parser_context_t *ctx,
+parser_error_t parser_getItem(const parser_context_t *ctx,
                               int8_t displayIdx,
                               char *outKey, uint16_t outKeyLen,
                               char *outValue, uint16_t outValueLen,

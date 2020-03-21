@@ -30,7 +30,7 @@ TEST(HEXUTILS, parseHexString) {
     char s[] = "1234567890";
     uint8_t data[100];
 
-    auto length = parseHexString(s, data);
+    auto length = parseHexString(data, sizeof(data), s);
 
     ASSERT_THAT(length, testing::Eq(5));
 
@@ -45,7 +45,7 @@ TEST(HEXUTILS, parseHexString2) {
     char s[] = "be333be7ee";
     uint8_t data[100];
 
-    auto length = parseHexString(s, data);
+    auto length = parseHexString(data, sizeof(data), s);
 
     ASSERT_THAT(length, testing::Eq(5));
 
