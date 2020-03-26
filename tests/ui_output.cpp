@@ -1,5 +1,5 @@
 /*******************************************************************************
-*   (c) 2019 ZondaX GmbH
+*   (c) 2019 Zondax GmbH
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ void validate_testcase(const testcase_t &tc) {
     parser_error_t err;
 
     const auto *buffer = (const uint8_t *) tc.tx.c_str();
-    uint16_t bufferLen = tc.tx.size();
+    size_t bufferLen = tc.tx.size();
 
     err = parser_parse(&ctx, buffer, bufferLen);
     ASSERT_EQ(parser_getErrorDescription(err), tc.parsingErr) << "Parsing error mismatch";
@@ -47,7 +47,7 @@ void check_testcase(const testcase_t &tc) {
     parser_error_t err;
 
     const auto *buffer = (const uint8_t *) tc.tx.c_str();
-    uint16_t bufferLen = tc.tx.size();
+    size_t bufferLen = tc.tx.size();
 
     err = parser_parse(&ctx, buffer, bufferLen);
     ASSERT_EQ(parser_getErrorDescription(err), tc.parsingErr)  << "Parsing error mismatch";
@@ -90,7 +90,7 @@ public:
 INSTANTIATE_TEST_SUITE_P (
     JsonTestCases,
     JsonTests,
-    ::testing::ValuesIn(GetJsonTestCases("testcases.json")),
+    ::testing::ValuesIn(GetJsonTestCases("testcases/manual.json")),
     JsonTests::PrintToStringParamName()
 );
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
-*   (c) 2019 ZondaX GmbH
+*   (c) 2019 Zondax GmbH
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
 ********************************************************************************/
 #include "testcases.h"
 #include <fmt/core.h>
-#include <crypto.h>
 #include <gtest/gtest.h>
 #include <algorithm>
 
@@ -50,7 +49,7 @@ std::vector<testcase_t> GetJsonTestCases(const std::string &filename) {
         std::string txStr = Json::writeString(wbuilder, v["tx"]);
 
         auto expected = std::vector<std::string>();
-        for (const auto & j : v["expected"]) {
+        for (const auto j : v["expected"]) {
             expected.push_back(j.asString());
         }
 

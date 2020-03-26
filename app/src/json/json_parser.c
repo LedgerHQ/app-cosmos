@@ -1,5 +1,5 @@
 /*******************************************************************************
-*   (c) 2018, 2019 ZondaX GmbH
+*   (c) 2018, 2019 Zondax GmbH
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -29,12 +29,12 @@ parser_error_t json_parse(parsed_json_t *parsed_json, const char *buffer, uint16
     parsed_json->buffer = buffer;
     parsed_json->bufferLen = bufferLen;
 
-    int num_tokens = jsmn_parse(
-        &parser,
-        parsed_json->buffer,
-        parsed_json->bufferLen,
-        parsed_json->tokens,
-        MAX_NUMBER_OF_TOKENS);
+    int32_t num_tokens = jsmn_parse(
+            &parser,
+            parsed_json->buffer,
+            parsed_json->bufferLen,
+            parsed_json->tokens,
+            MAX_NUMBER_OF_TOKENS);
 
     if (num_tokens < 0) {
         switch (num_tokens) {

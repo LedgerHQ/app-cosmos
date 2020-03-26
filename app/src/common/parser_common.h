@@ -1,5 +1,5 @@
 /*******************************************************************************
-*  (c) 2019 ZondaX GmbH
+*  (c) 2019 Zondax GmbH
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -22,9 +22,9 @@ extern "C" {
 #include <stdint.h>
 #include <stddef.h>
 
-#define CHECK_PARSER_ERR(CALL) { \
-    parser_error_t err = CALL;  \
-    if (err!=parser_ok) return err;}
+#define CHECK_PARSER_ERR(__CALL) { \
+    parser_error_t __err = __CALL;  \
+    if (__err!=parser_ok) return __err;}
 
 typedef enum {
     // Generic errors
@@ -47,6 +47,7 @@ typedef enum {
     parser_value_out_of_range,
     parser_invalid_address,
     parser_unexpected_chain,
+    parser_missing_field,
     parser_query_no_results,
     // Coin Specific
     parser_json_zero_tokens,

@@ -1,5 +1,5 @@
 /*******************************************************************************
-*  (c) 2019 ZondaX GmbH
+*  (c) 2019 Zondax GmbH
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
 ********************************************************************************/
 
 #include "parser_impl.h"
-#include "tx_display.h"
-#include "parser_txdef.h"
 
 parser_tx_t parser_tx_obj;
 
@@ -38,7 +36,7 @@ parser_error_t parser_init_context(parser_context_t *ctx,
     return parser_ok;
 }
 
-parser_error_t parser_init(parser_context_t *ctx, const uint8_t *buffer, uint16_t bufferSize) {
+parser_error_t parser_init(parser_context_t *ctx, const uint8_t *buffer, size_t bufferSize) {
     parser_error_t err = parser_init_context(ctx, buffer, bufferSize);
     if (err != parser_ok)
         return err;
@@ -70,6 +68,8 @@ const char *parser_getErrorDescription(parser_error_t err) {
             return "Unexpected chain";
         case parser_query_no_results:
             return "item query returned no results";
+        case parser_missing_field:
+            return "missing field";
 //////
         case parser_display_idx_out_of_range:
             return "display index out of range";
@@ -108,7 +108,8 @@ const char *parser_getErrorDescription(parser_error_t err) {
 
 parser_error_t _readTx(parser_context_t *c, parser_tx_t *v) {
     parser_error_t err = json_parse(&parser_tx_obj.json,
-                                    (const char *) c->buffer, c->bufferLen);
+                                    (const char *) c->buffer,
+                                    c->bufferLen);
     if (err != parser_ok) {
         return err;
     }

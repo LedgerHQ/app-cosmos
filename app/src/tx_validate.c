@@ -1,5 +1,5 @@
 /*******************************************************************************
-*   (c) 2018, 2019 ZondaX GmbH
+*   (c) 2018, 2019 Zondax GmbH
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ int8_t contains_whitespace(parsed_json_t *json) {
 }
 
 int8_t is_sorted(int16_t first_index,
-    int16_t second_index,
+                 int16_t second_index,
                  parsed_json_t *json) {
 #if DEBUG_SORTING
     char first[256];
@@ -78,8 +78,8 @@ int8_t is_sorted(int16_t first_index,
     second[size] = '\0';
 #endif
 
-    if (strcmp((const char *) (json->buffer+json->tokens[first_index].start),
-               (const char *) (json->buffer+json->tokens[second_index].start)) <= 0) {
+    if (strcmp((json->buffer + json->tokens[first_index].start),
+               (json->buffer + json->tokens[second_index].start)) <= 0) {
         return 1;
     }
     return 0;
@@ -115,44 +115,44 @@ parser_error_t tx_validate(parsed_json_t *json) {
     }
 
     if (object_get_value(
-        json,
-        0,
-        "chain_id") == -1) {
+            json,
+            0,
+            "chain_id") == -1) {
         return parser_json_missing_chain_id;
     }
 
     if (object_get_value(
-        json,
-        0,
-        "sequence") == -1) {
+            json,
+            0,
+            "sequence") == -1) {
         return parser_json_missing_sequence;
     }
 
     if (object_get_value(
-        json,
-        0,
-        "fee") == -1) {
+            json,
+            0,
+            "fee") == -1) {
         return parser_json_missing_fee;
     }
 
     if (object_get_value(
-        json,
-        0,
-        "msgs") == -1) {
+            json,
+            0,
+            "msgs") == -1) {
         return parser_json_missing_msgs;
     }
 
     if (object_get_value(
-        json,
-        0,
-        "account_number") == -1) {
+            json,
+            0,
+            "account_number") == -1) {
         return parser_json_missing_account_number;
     }
 
     if (object_get_value(
-        json,
-        0,
-        "memo") == -1) {
+            json,
+            0,
+            "memo") == -1) {
         return parser_json_missing_memo;
     }
 

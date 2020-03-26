@@ -1,5 +1,5 @@
 /*******************************************************************************
-*  (c) 2019 ZondaX GmbH
+*  (c) 2019 Zondax GmbH
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -23,9 +23,6 @@
 extern "C" {
 #endif
 
-#define NUM_KEY_SUBSTITUTIONS 29
-#define NUM_VALUE_SUBSTITUTIONS 8
-
 typedef struct {
     char str1[50];
     char str2[50];
@@ -35,7 +32,7 @@ extern parser_tx_t parser_tx_obj;
 
 parser_error_t parser_init(parser_context_t *ctx,
                            const uint8_t *buffer,
-                           uint16_t bufferSize);
+                           size_t bufferSize);
 
 parser_error_t _readTx(parser_context_t *c, parser_tx_t *v);
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
-*   (c) 2018, 2019 ZondaX GmbH
+*   (c) 2018, 2019 Zondax GmbH
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -16,33 +16,31 @@
 
 #include "tx_display.h"
 #include "tx_parser.h"
-#include "json/json_parser.h"
 #include "parser_impl.h"
 #include <zxmacros.h>
 
 #define NUM_REQUIRED_ROOT_PAGES 6
 
-// Required pages
-const char *get_required_root_item(uint8_t i) {
+const char *get_required_root_item(root_item_e i) {
     switch (i) {
-        case 0:
+        case root_item_chain_id:
             return "chain_id";
-        case 1:
+        case root_item_account_number:
             return "account_number";
-        case 2:
+        case root_item_sequence:
             return "sequence";
-        case 3:
+        case root_item_fee:
             return "fee";
-        case 4:
+        case root_item_memo:
             return "memo";
-        case 5:
+        case root_item_msgs:
             return "msgs";
         default:
             return "?";
     }
 }
 
-static const uint16_t root_max_level[NUM_REQUIRED_ROOT_PAGES] = {
+static const uint8_t root_max_level[NUM_REQUIRED_ROOT_PAGES] = {
         2, // "chain_id",
         2, // "account_number",
         2, // "sequence",
@@ -52,102 +50,165 @@ static const uint16_t root_max_level[NUM_REQUIRED_ROOT_PAGES] = {
 };
 
 typedef struct {
-    int16_t numItems;
-    // token where the subitem starts
-    int16_t subroot_start_token[NUM_REQUIRED_ROOT_PAGES];
-    // Number of subitems below the root item
-    uint8_t num_subpages[NUM_REQUIRED_ROOT_PAGES];
+    uint16_t total_item_count;
+    // token where the root_item starts (negative for non-existing)
+    int16_t root_item_start_token_idx[NUM_REQUIRED_ROOT_PAGES];
+    // number of items the root_item contains
+    uint8_t root_item_number_subitems[NUM_REQUIRED_ROOT_PAGES];
 } display_cache_t;
 
 display_cache_t display_cache;
 
-void tx_indexRootFields() {
+parser_error_t tx_display_readTx(parser_context_t *ctx, const uint8_t *data, size_t dataLen) {
+    CHECK_PARSER_ERR(parser_init(ctx, data, dataLen))
+    CHECK_PARSER_ERR(_readTx(ctx, &parser_tx_obj))
+}
+
+parser_error_t tx_indexRootFields() {
     if (parser_tx_obj.flags.cache_valid) {
-        return;
+        return parser_ok;
     }
 
     // Clear cache
     MEMZERO(&display_cache, sizeof(display_cache_t));
+    char tmp_key[20];
+    char tmp_val[40];
+    char tmp_val_ref[40];
+    parser_tx_obj.flags.msg_type_grouping = 1;
+    parser_tx_obj.filter_msg_type_count = 0;
 
-    // Calculate pages
-    for (int8_t idx = 0; idx < NUM_REQUIRED_ROOT_PAGES; idx++) {
-        const int16_t subroot_token_idx = object_get_value(&parser_tx_obj.json,
-                                                           ROOT_TOKEN_INDEX,
-                                                           get_required_root_item(idx));
+    for (int8_t root_item_idx = 0; root_item_idx < NUM_REQUIRED_ROOT_PAGES; root_item_idx++) {
+        const char *req_root_item_key = get_required_root_item( (root_item_e) root_item_idx);
+        const int16_t req_root_item_key_token_idx = object_get_value(&parser_tx_obj.json,
+                                                                     ROOT_TOKEN_INDEX,
+                                                                     req_root_item_key);
 
-        if (subroot_token_idx < 0) {
-            break;
+        // Remember root item start token
+        display_cache.root_item_start_token_idx[root_item_idx] = req_root_item_key_token_idx;
+
+        if (req_root_item_key_token_idx < 0) {
+            continue;
         }
 
-        display_cache.num_subpages[idx] = 0;
-        display_cache.subroot_start_token[idx] = subroot_token_idx;
-
-        char tmp_key[2];
-        char tmp_val[2];
-        INIT_QUERY_CONTEXT(tmp_key, sizeof(tmp_key),
-                           tmp_val, sizeof(tmp_val),
-                           0, root_max_level[idx])
-
-        STRNCPY_S(parser_tx_obj.query.out_key,
-                  get_required_root_item(idx),
-                  parser_tx_obj.query.out_key_len)
-
-        parser_tx_obj.query.max_depth = MAX_RECURSION_DEPTH;
-        parser_tx_obj.query.item_index = 0;
-
+        // Now count how many items can be found in this root item
         parser_error_t err = parser_ok;
+        int32_t current_item_idx = 0;
         while (err == parser_ok) {
-            parser_tx_obj.query.item_index_current = 0;
-            uint16_t dummy;
-            err = tx_traverse_find(subroot_token_idx, &dummy);
-            if (err == parser_ok) {
-                display_cache.num_subpages[idx]++;
-                parser_tx_obj.query.item_index++;
+            INIT_QUERY_CONTEXT(tmp_key, sizeof(tmp_key),
+                               tmp_val, sizeof(tmp_val),
+                               0, root_max_level[root_item_idx])
+            parser_tx_obj.query.item_index = current_item_idx;
+            strncpy_s(parser_tx_obj.query.out_key, req_root_item_key, parser_tx_obj.query.out_key_len);
+
+            uint16_t ret_value_token_index;
+
+            err = tx_traverse_find(display_cache.root_item_start_token_idx[root_item_idx],
+                                   &ret_value_token_index);
+
+            if (err != parser_ok) {
+                continue;
             }
+
+            uint8_t pageCount;
+            CHECK_PARSER_ERR(tx_getToken(ret_value_token_index,
+                                         parser_tx_obj.query.out_val,
+                                         parser_tx_obj.query.out_key_len,
+                                         0, &pageCount))
+
+            if (root_item_idx == root_item_memo) {
+                if (strlen(parser_tx_obj.query.out_val) == 0) {
+                    err = parser_query_no_results;
+                    continue;
+                }
+            }
+
+            if (root_item_idx == root_item_msgs && parser_tx_obj.flags.msg_type_grouping == 1u) {
+                if (strcmp(tmp_key, "msgs/type") == 0) {
+                    if (parser_tx_obj.filter_msg_type_count == 0) {
+                        // First message, initialize expected type
+                        strcpy(tmp_val_ref, tmp_val);
+                        parser_tx_obj.filter_msg_type_valid_idx = current_item_idx;
+                    }
+
+                    if (strcmp(tmp_val_ref, tmp_val) != 0) {
+                        // different values, so disable grouping
+                        parser_tx_obj.flags.msg_type_grouping = 0;
+                        parser_tx_obj.filter_msg_type_count = 0;
+                    }
+
+                    parser_tx_obj.filter_msg_type_count++;
+                }
+            }
+
+            display_cache.root_item_number_subitems[root_item_idx]++;
+            current_item_idx++;
         }
 
-        display_cache.numItems += display_cache.num_subpages[idx];
-
-        if (display_cache.num_subpages[idx] == 0) {
-            break;
+        if (err != parser_query_no_results) {
+            return err;
         }
+
+        display_cache.total_item_count += display_cache.root_item_number_subitems[root_item_idx];
     }
 
     parser_tx_obj.flags.cache_valid = 1;
+
+    return parser_ok;
 }
 
-int16_t tx_display_numItems() {
-    tx_indexRootFields();
-    return display_cache.numItems;
+uint16_t tx_display_numItems() {
+    parser_error_t err = tx_indexRootFields();
+    if (err != parser_ok) {
+        return 0;
+    }
+
+    uint16_t count = display_cache.total_item_count;
+    // Remove grouped items from list
+    if (parser_tx_obj.flags.msg_type_grouping == 1u && parser_tx_obj.filter_msg_type_count) {
+        count -= parser_tx_obj.filter_msg_type_count - 1;
+    }
+
+    return count;
 }
 
 // This function assumes that the tx_ctx has been set properly
-parser_error_t tx_display_set_query(uint16_t displayIdx, uint16_t *outStartToken) {
+parser_error_t tx_display_query(uint16_t displayIdx,
+                                char *outKey, uint16_t outKeyLen,
+                                uint16_t *ret_value_token_index) {
     tx_indexRootFields();
 
-    if (displayIdx < 0 || displayIdx >= display_cache.numItems) {
+    if (displayIdx < 0 || displayIdx >= display_cache.total_item_count) {
         return parser_display_idx_out_of_range;
     }
 
-    parser_tx_obj.query.item_index = 0;
+    uint16_t current_item_index = 0;
     uint16_t root_index = 0;
 
     // Find root index | display idx -> item_index
     // consume indexed subpages until we get the item index in the subpage
     for (uint16_t i = 0; i < displayIdx; i++) {
-        parser_tx_obj.query.item_index++;
-        if (parser_tx_obj.query.item_index >= display_cache.num_subpages[root_index]) {
-            parser_tx_obj.query.item_index = 0;
+        current_item_index++;
+        if (current_item_index >= display_cache.root_item_number_subitems[root_index]) {
+            current_item_index = 0;
+
+            // Advance root index and skip empty items
             root_index++;
+            while (display_cache.root_item_number_subitems[root_index] == 0) root_index++;
         }
     }
 
-    parser_tx_obj.query.item_index_root = root_index;
-    parser_tx_obj.query.item_index_current = 0;
+    // Prepare query
+    char tmp_val[2];
+    INIT_QUERY_CONTEXT(outKey, outKeyLen, tmp_val, sizeof(tmp_val),
+                       0, root_max_level[root_index])
+    parser_tx_obj.query.item_index = current_item_index;
+    parser_tx_obj.query._item_index_current = 0;
     parser_tx_obj.query.max_level = root_max_level[root_index];
-    parser_tx_obj.query.max_depth = MAX_RECURSION_DEPTH;
 
-    *outStartToken = display_cache.subroot_start_token[parser_tx_obj.query.item_index_root];
+    strncpy_s(outKey, get_required_root_item( (root_item_e) root_index), outKeyLen);
+    CHECK_PARSER_ERR(tx_traverse_find(
+            display_cache.root_item_start_token_idx[root_index],
+            ret_value_token_index))
 
     return parser_ok;
 }
@@ -166,7 +227,7 @@ parser_error_t tx_display_set_query(uint16_t displayIdx, uint16_t *outStartToken
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static const key_subst_t key_substitutions[NUM_KEY_SUBSTITUTIONS] = {
+static const key_subst_t key_substitutions[] = {
         {"chain_id",                          "Chain ID"},
         {"account_number",                    "Account"},
         {"sequence",                          "Sequence"},
@@ -226,11 +287,9 @@ void tx_display_make_friendly() {
     tx_indexRootFields();
 
     // post process keys
-    for (int8_t i = 0; i < NUM_KEY_SUBSTITUTIONS; i++) {
+    for (size_t i = 0; i < array_length(key_substitutions); i++) {
         if (!strcmp(parser_tx_obj.query.out_key, key_substitutions[i].str1)) {
-            STRNCPY_S(parser_tx_obj.query.out_key,
-                      key_substitutions[i].str2,
-                      parser_tx_obj.query.out_key_len)
+            strncpy_s(parser_tx_obj.query.out_key, key_substitutions[i].str2, parser_tx_obj.query.out_key_len);
             break;
         }
     }

@@ -1,5 +1,5 @@
 /*******************************************************************************
-*   (c) 2018, 2019 ZondaX GmbH
+*   (c) 2018, 2019 Zondax GmbH
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -15,27 +15,38 @@
 ********************************************************************************/
 
 #pragma once
+
 #include <stdint.h>
 #include <common/parser_common.h>
+#include "parser_txdef.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define STRNCPY_S(DST, SRC, DST_SIZE) \
-    explicit_bzero(DST, DST_SIZE);           \
-    strncpy(DST, SRC, DST_SIZE - 1);
+typedef enum {
+    root_item_chain_id = 0,
+    root_item_account_number = 1,
+    root_item_sequence = 2,
+    root_item_fee = 3,
+    root_item_memo = 4,
+    root_item_msgs = 5,
+} root_item_e;
 
-/// This is the main function called from ledger that updates key and value strings
-/// that are going to be displayed in the UI.
-/// This function assumes that the tx_ctx has been properly set
-parser_error_t tx_display_set_query(uint16_t displayIdx, uint16_t *outStartToken);
+const char *get_required_root_item(root_item_e i);
+
+parser_error_t tx_display_query(uint16_t displayIdx,
+                                char *outKey,
+                                uint16_t outKeyLen,
+                                uint16_t *ret_value_token_index);
+
+parser_error_t tx_display_readTx(parser_context_t *c,
+                                 const uint8_t *data,
+                                 size_t dataLen);
 
 /// Return number of UI pages that we'll have for the current json transaction (only if the tx is valid)
 /// \return number of pages (msg pages + 5 required)
-int16_t tx_display_numItems();
-
-const char *get_required_root_item(uint8_t i);
+uint16_t tx_display_numItems();
 
 void tx_display_make_friendly();
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
-*   (c) 2018, 2019 ZondaX GmbH
+*   (c) 2018, 2019 Zondax GmbH
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -47,8 +47,8 @@ extern "C" {
 //  - parsed json tokens
 //  - re-created SendMsg struct with indices pointing to tokens in parsed json
 typedef struct {
-    int8_t isValid;
-    uint16_t numberOfTokens;
+    uint8_t isValid;
+    int32_t numberOfTokens;
     jsmntok_t tokens[MAX_NUMBER_OF_TOKENS];
     const char *buffer;
     uint16_t bufferLen;

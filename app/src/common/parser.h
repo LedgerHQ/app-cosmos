@@ -1,5 +1,5 @@
 /*******************************************************************************
-*   (c) 2019 ZondaX GmbH
+*   (c) 2019 Zondax GmbH
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ const char *parser_getErrorDescription(parser_error_t err);
 //// parses a tx buffer
 parser_error_t parser_parse(parser_context_t *ctx,
                             const uint8_t *data,
-                            uint16_t dataLen);
+                            size_t dataLen);
 
 //// verifies tx fields
 parser_error_t parser_validate(const parser_context_t *ctx);
@@ -39,7 +39,7 @@ uint8_t parser_getNumItems(const parser_context_t *ctx);
 
 // retrieves a readable output for each field / page
 parser_error_t parser_getItem(const parser_context_t *ctx,
-                              int8_t displayIdx,
+                              uint16_t displayIdx,
                               char *outKey, uint16_t outKeyLen,
                               char *outValue, uint16_t outValueLen,
                               uint8_t pageIdx, uint8_t *pageCount);

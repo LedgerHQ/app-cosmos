@@ -1,5 +1,6 @@
 /*******************************************************************************
-*   (c) 2019 Zondax GmbH
+*   (c) 2018-2020 Zondax GmbH
+*   (c) 2016 Ledger
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -14,15 +15,28 @@
 *  limitations under the License.
 ********************************************************************************/
 #pragma once
-#include <json/json.h>
-#include <fstream>
 
-typedef struct {
-    std::string description;
-    std::string tx;
-    std::string parsingErr;
-    std::string validationErr;
-    std::vector<std::string> expected;
-} testcase_t;
+#include <stdint.h>
 
-std::vector<testcase_t> GetJsonTestCases(const std::string& filename);
+#if defined(LEDGER_SPECIFIC)
+#include "bolos_target.h"
+#if defined(BOLOS_SDK)
+#include "os.h"
+#include "cx.h"
+#endif
+#endif
+
+/// view_init (initializes UI)
+void view_init();
+
+/// view_idle_show (idle view - main menu + status)
+void view_idle_show(unsigned int ignored);
+
+/// view_error (error view)
+void view_error_show();
+
+// shows address in the screen
+void view_address_show();
+
+// Shows review screen + later sign menu
+void view_sign_show();
