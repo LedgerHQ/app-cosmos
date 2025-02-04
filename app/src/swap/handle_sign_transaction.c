@@ -32,7 +32,7 @@ static const char * chain_ids[] = {COIN_DEFAULT_CHAINID, OSMOSIS_CHAINID, DYDX_C
 
 bool is_allowed_chainid(const char *chainId) {
     for (uint32_t i = 0; i < array_length(chain_ids); i++) {
-        if (strcmp(chainId, chain_ids[i]) == 0) {
+        if (strcmp(chainId, PIC(chain_ids[i])) == 0) {
             return true;
         }
     }
