@@ -77,6 +77,7 @@ static void library_main(libargs_t *args) {
             }
         }
         CATCH_OTHER(e) {
+            (void) e;
         }
         FINALLY {
             os_lib_end();
@@ -117,7 +118,9 @@ __attribute__((section(".boot"))) int main(int arg0) {
                 app_main();
             }
             CATCH_OTHER(e)
-            {}
+            {
+                (void) e;
+            }
             FINALLY
             {}
         }
