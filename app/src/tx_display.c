@@ -35,12 +35,6 @@
     return parser_transaction_too_big;                                         \
   }
 
-#define ASSERT_PTR_BOUNDS_N(count, dstLen, n)                                  \
-  count += n;                                                                  \
-  if (count > dstLen) {                                                        \
-    return parser_transaction_too_big;                                         \
-  }
-
 const char *get_required_root_item(root_item_e i) {
   switch (i) {
   case root_item_chain_id:
@@ -655,9 +649,13 @@ parser_error_t tx_display_translation(char *dst, uint16_t dstLen, char *src,
       }
       if (!found) {
         // Write out the value as a hex escape, \xNN
-        ASSERT_PTR_BOUNDS_N(count, dstLen, 4);
+        // Check for 5 bytes: 4 chars + null terminator for snprintf
+        if (count + 5 > dstLen) {
+          return parser_transaction_too_big;
+        }
         snprintf(dst, 5, "\\x%.02X", tmp_codepoint);
         dst += 4;
+        count += 4;
       }
     } else if (tmp_codepoint >= 32 && tmp_codepoint <= ((int32_t)0x7F)) {
       ASSERT_PTR_BOUNDS(count, dstLen);
