@@ -29,6 +29,10 @@
 
 #define NUM_REQUIRED_ROOT_PAGES 7
 
+// Hex escape "\xNN" requires 4 characters, but snprintf adds a null terminator
+#define HEX_ESCAPE_LEN 4
+#define HEX_ESCAPE_SNPRINTF_SIZE (HEX_ESCAPE_LEN + 1)
+
 #define ASSERT_PTR_BOUNDS(count, dstLen)                                       \
   count++;                                                                     \
   if (count > dstLen) {                                                        \
@@ -649,13 +653,13 @@ parser_error_t tx_display_translation(char *dst, uint16_t dstLen, char *src,
       }
       if (!found) {
         // Write out the value as a hex escape, \xNN
-        // Check for 5 bytes: 4 chars + null terminator for snprintf
-        if (count + 5 > dstLen) {
+        // Check for snprintf buffer size (includes null terminator)
+        if (count + HEX_ESCAPE_SNPRINTF_SIZE > dstLen) {
           return parser_transaction_too_big;
         }
-        snprintf(dst, 5, "\\x%.02X", tmp_codepoint);
-        dst += 4;
-        count += 4;
+        snprintf(dst, HEX_ESCAPE_SNPRINTF_SIZE, "\\x%.02X", tmp_codepoint);
+        dst += HEX_ESCAPE_LEN;
+        count += HEX_ESCAPE_LEN;
       }
     } else if (tmp_codepoint >= 32 && tmp_codepoint <= ((int32_t)0x7F)) {
       ASSERT_PTR_BOUNDS(count, dstLen);
