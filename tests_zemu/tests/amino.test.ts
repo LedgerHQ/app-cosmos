@@ -28,6 +28,7 @@ import {
   cliGovDeposit,
   example_tx_str_msgMultiSend,
   big_transaction,
+  wasm_execute_contract_boundary_test,
 } from './common'
 
 // @ts-ignore
@@ -339,6 +340,55 @@ describe('Amino', function () {
       // Wait until we are not in the main menu
       await sim.waitUntilScreenIsNot(sim.getMainMenuSnapshot())
       await sim.compareSnapshotsAndApprove('.', `${m.prefix.toLowerCase()}-msgMultiSend`)
+
+      const resp = await signatureRequest
+      console.log(resp)
+
+      expect(resp).toHaveProperty('signature')
+
+      // Now verify the signature
+      const hash = crypto.createHash('sha256')
+      const msgHash = Uint8Array.from(hash.update(tx).digest())
+
+      const signatureDER = resp.signature
+      const signature = secp256k1.signatureImport(Uint8Array.from(signatureDER))
+
+      const pk = Uint8Array.from(respPk.compressed_pk)
+
+      const signatureOk = secp256k1.ecdsaVerify(signature, msgHash, pk)
+      expect(signatureOk).toEqual(true)
+    } finally {
+      await sim.close()
+    }
+  })
+
+  // Test for string length boundary issue - certain field length combinations
+  // should not cause "Data is Invalid" errors
+  test.concurrent.each(DEVICE_MODELS)('wasm execute contract boundary test', async function (m) {
+    const sim = new Zemu(m.path)
+    try {
+      await sim.start({ ...defaultOptions, model: m.name })
+      const app = new CosmosApp(sim.getTransport())
+
+      // Activate expert mode
+      await sim.toggleExpertMode()
+
+      const path = "m/44'/118'/0'/0/0"
+      const tx = Buffer.from(JSON.stringify(wasm_execute_contract_boundary_test))
+      const hrp = 'neutron'
+
+      // get address / publickey
+      const respPk = await app.getAddressAndPubKey(path, hrp)
+      expect(respPk).toHaveProperty('compressed_pk')
+      expect(respPk).toHaveProperty('bech32_address')
+      console.log(respPk)
+
+      // do not wait here..
+      const signatureRequest = app.sign(path, tx, hrp, AMINO_JSON_TX)
+
+      // Wait until we are not in the main menu
+      await sim.waitUntilScreenIsNot(sim.getMainMenuSnapshot())
+      await sim.compareSnapshotsAndApprove('.', `${m.prefix.toLowerCase()}-wasm_boundary_test`)
 
       const resp = await signatureRequest
       console.log(resp)
