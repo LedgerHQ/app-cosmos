@@ -27,8 +27,11 @@ import {
   setWithdrawAddress,
   cliGovDeposit,
   example_tx_str_msgMultiSend,
+  example_tx_str_msgMultiSendAndSend,
   big_transaction,
   wasm_execute_contract_boundary_test,
+  babylonWrappedDelegate,
+  babylonWrappedUndelegate,
 } from './common'
 
 // @ts-ignore
@@ -90,6 +93,84 @@ describe('Amino', function () {
 
       const signatureOk = secp256k1.ecdsaVerify(signature, msgHash, pk)
       expect(signatureOk).toEqual(true)
+    } finally {
+      await sim.close()
+    }
+  })
+
+  test.concurrent.each(DEVICE_MODELS)('sign basic, omitted HRP after rejected get_addr', async function (m) {
+    const sim = new Zemu(m.path)
+    try {
+      await sim.start({ ...defaultOptions, model: m.name })
+      const app = new CosmosApp(sim.getTransport())
+
+      const path = "m/44'/118'/0'/0/0"
+      const tx = Buffer.from(JSON.stringify(example_tx_str_basic), 'utf-8')
+
+      // Prime the global HRP with a rejected mixed-case GET_ADDR on the default
+      // Cosmos path. An upper-case HRP is not a valid bech32 prefix, so
+      // checkChainConfig() refuses it outright - but extractHRP() runs first,
+      // so the mixed-case HRP is still written into the shared global buffer
+      // before the request fails.
+      const rejected = app.getAddressAndPubKey(path, 'CoSmOs')
+      await expect(rejected).rejects.toMatchObject({ returnCode: 0x698c })
+
+      // A later SIGN that omits the HRP must still behave as a self-contained
+      // default-Cosmos flow and reach review, rather than reusing the leftover
+      // HRP and aborting before review.
+      const signatureRequest = app.sign(path, tx, undefined, AMINO_JSON_TX)
+
+      await sim.waitUntilScreenIsNot(sim.getMainMenuSnapshot())
+      await sim.compareSnapshotsAndApprove('.', `${m.prefix.toLowerCase()}-sign_basic_omitted_hrp`)
+
+      const resp = await signatureRequest
+      expect(resp).toHaveProperty('signature')
+
+      // Fetch the pubkey with a valid HRP and verify the produced signature.
+      const respPk = await app.getAddressAndPubKey(path, 'cosmos')
+      const hash = crypto.createHash('sha256')
+      const msgHash = Uint8Array.from(hash.update(tx).digest())
+      const signatureDER = resp.signature
+      const signature = secp256k1.signatureImport(Uint8Array.from(signatureDER))
+      const pk = Uint8Array.from(respPk.compressed_pk)
+      const signatureOk = secp256k1.ecdsaVerify(signature, msgHash, pk)
+      expect(signatureOk).toEqual(true)
+    } finally {
+      await sim.close()
+    }
+  })
+
+  test.concurrent.each(DEVICE_MODELS)('sign rejects a malformed HRP on the generic Cosmos path', async function (m) {
+    const sim = new Zemu(m.path)
+    try {
+      await sim.start({ ...defaultOptions, model: m.name })
+      const app = new CosmosApp(sim.getTransport())
+
+      const path = "m/44'/118'/0'/0/0"
+      const tx = Buffer.from(JSON.stringify(example_tx_str_basic), 'utf-8')
+
+      // SIGN declares its HRP in the first chunk (extractHDPath_HRP), the second
+      // call site of the same chain-config check. A NUL-smuggled 'inj' has to be
+      // refused here as well, before any of the transaction reaches review --
+      // otherwise the device signs for the Cosmos 118' key while the host
+      // believes it is talking to Injective.
+      await expect(app.sign(path, tx, 'inj\u0000X', AMINO_JSON_TX)).rejects.toMatchObject({
+        returnCode: 0x698c,
+        errorMessage: 'Chain config not supported',
+      })
+
+      // Uppercase is refused on the same call site, and now with the
+      // chain-config status word rather than a generic execution error.
+      await expect(app.sign(path, tx, 'COSMOS', AMINO_JSON_TX)).rejects.toMatchObject({
+        returnCode: 0x698c,
+        errorMessage: 'Chain config not supported',
+      })
+
+      // The device is left idle by both rejections, not stuck mid-transaction:
+      // a following well-formed request is accepted rather than answered with
+      // COMMAND_NOT_ALLOWED.
+      const resp = await app.getAddressAndPubKey(path, 'akash')
+      expect(resp.bech32_address.startsWith('akash1')).toBe(true)
     } finally {
       await sim.close()
     }
@@ -315,6 +396,53 @@ describe('Amino', function () {
     }
   })
 
+  // A MsgMultiSend batched with a MsgSend: both messages and all of their
+  // fields (including the Send's amount, from and to) must appear on the review
+  // screens. Runs in normal (non-expert) mode on the default chain.
+  test.concurrent.each(DEVICE_MODELS)('MsgMultiSendAndSend', async function (m) {
+    const sim = new Zemu(m.path)
+    try {
+      await sim.start({ ...defaultOptions, model: m.name })
+      const app = new CosmosApp(sim.getTransport())
+
+      const path = "m/44'/118'/0'/0/0"
+      const tx = Buffer.from(JSON.stringify(example_tx_str_msgMultiSendAndSend))
+      const hrp = 'cosmos'
+
+      // get address / publickey
+      const respPk = await app.getAddressAndPubKey(path, hrp)
+      expect(respPk).toHaveProperty('compressed_pk')
+      expect(respPk).toHaveProperty('bech32_address')
+      console.log(respPk)
+
+      // do not wait here..
+      const signatureRequest = app.sign(path, tx, hrp, AMINO_JSON_TX)
+
+      // Wait until we are not in the main menu
+      await sim.waitUntilScreenIsNot(sim.getMainMenuSnapshot())
+      await sim.compareSnapshotsAndApprove('.', `${m.prefix.toLowerCase()}-msgMultiSendAndSend`)
+
+      const resp = await signatureRequest
+      console.log(resp)
+
+      expect(resp).toHaveProperty('signature')
+
+      // Now verify the signature
+      const hash = crypto.createHash('sha256')
+      const msgHash = Uint8Array.from(hash.update(tx).digest())
+
+      const signatureDER = resp.signature
+      const signature = secp256k1.signatureImport(Uint8Array.from(signatureDER))
+
+      const pk = Uint8Array.from(respPk.compressed_pk)
+
+      const signatureOk = secp256k1.ecdsaVerify(signature, msgHash, pk)
+      expect(signatureOk).toEqual(true)
+    } finally {
+      await sim.close()
+    }
+  })
+
   test.concurrent.each(DEVICE_MODELS)('MsgMultisend', async function (m) {
     const sim = new Zemu(m.path)
     try {
@@ -495,6 +623,97 @@ describe('Amino', function () {
       // Now verify the signature
       const sha3 = require('js-sha3')
       const msgHash = Buffer.from(sha3.keccak256(tx), 'hex')
+
+      const signatureDER = resp.signature
+      const signature = secp256k1.signatureImport(Uint8Array.from(signatureDER))
+
+      const pk = Uint8Array.from(respPk.compressed_pk)
+
+      const signatureOk = secp256k1.ecdsaVerify(signature, msgHash, pk)
+      expect(signatureOk).toEqual(true)
+    } finally {
+      await sim.close()
+    }
+  })
+
+  // Babylon x/epoching wrapped staking messages. The wrapped MsgDelegate is
+  // nested under a "msg" key; the device must render the inner Type, Amount,
+  // Delegator and Validator as reviewable fields (not a raw JSON blob).
+  test.concurrent.each(DEVICE_MODELS)('babylon wrapped delegate', async function (m) {
+    const sim = new Zemu(m.path)
+    try {
+      await sim.start({ ...defaultOptions, model: m.name })
+      const app = new CosmosApp(sim.getTransport())
+
+      const path = "m/44'/118'/0'/0/0"
+      const tx = Buffer.from(JSON.stringify(babylonWrappedDelegate), 'utf-8')
+      const hrp = 'bbn'
+
+      // get address / publickey
+      const respPk = await app.getAddressAndPubKey(path, hrp)
+      expect(respPk).toHaveProperty('compressed_pk')
+      expect(respPk).toHaveProperty('bech32_address')
+      console.log(respPk)
+
+      // do not wait here..
+      const signatureRequest = app.sign(path, tx, hrp, AMINO_JSON_TX)
+
+      // Wait until we are not in the main menu
+      await sim.waitUntilScreenIsNot(sim.getMainMenuSnapshot())
+      await sim.compareSnapshotsAndApprove('.', `${m.prefix.toLowerCase()}-babylon_wrapped_delegate`)
+
+      const resp = await signatureRequest
+      console.log(resp)
+
+      expect(resp).toHaveProperty('signature')
+
+      // Now verify the signature
+      const hash = crypto.createHash('sha256')
+      const msgHash = Uint8Array.from(hash.update(tx).digest())
+
+      const signatureDER = resp.signature
+      const signature = secp256k1.signatureImport(Uint8Array.from(signatureDER))
+
+      const pk = Uint8Array.from(respPk.compressed_pk)
+
+      const signatureOk = secp256k1.ecdsaVerify(signature, msgHash, pk)
+      expect(signatureOk).toEqual(true)
+    } finally {
+      await sim.close()
+    }
+  })
+
+  test.concurrent.each(DEVICE_MODELS)('babylon wrapped undelegate', async function (m) {
+    const sim = new Zemu(m.path)
+    try {
+      await sim.start({ ...defaultOptions, model: m.name })
+      const app = new CosmosApp(sim.getTransport())
+
+      const path = "m/44'/118'/0'/0/0"
+      const tx = Buffer.from(JSON.stringify(babylonWrappedUndelegate), 'utf-8')
+      const hrp = 'bbn'
+
+      // get address / publickey
+      const respPk = await app.getAddressAndPubKey(path, hrp)
+      expect(respPk).toHaveProperty('compressed_pk')
+      expect(respPk).toHaveProperty('bech32_address')
+      console.log(respPk)
+
+      // do not wait here..
+      const signatureRequest = app.sign(path, tx, hrp, AMINO_JSON_TX)
+
+      // Wait until we are not in the main menu
+      await sim.waitUntilScreenIsNot(sim.getMainMenuSnapshot())
+      await sim.compareSnapshotsAndApprove('.', `${m.prefix.toLowerCase()}-babylon_wrapped_undelegate`)
+
+      const resp = await signatureRequest
+      console.log(resp)
+
+      expect(resp).toHaveProperty('signature')
+
+      // Now verify the signature
+      const hash = crypto.createHash('sha256')
+      const msgHash = Uint8Array.from(hash.update(tx).digest())
 
       const signatureDER = resp.signature
       const signature = secp256k1.signatureImport(Uint8Array.from(signatureDER))

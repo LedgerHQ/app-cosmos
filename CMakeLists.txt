@@ -122,6 +122,7 @@ file(GLOB_RECURSE LIB_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/deps/ledger-zxlib/src/segwit_addr.c
         ####
         ${CMAKE_CURRENT_SOURCE_DIR}/app/src/parser.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/app/src/chain_config.c
         ${CMAKE_CURRENT_SOURCE_DIR}/app/src/formatting.c
         ${CMAKE_CURRENT_SOURCE_DIR}/app/src/parser_impl.c
         ${CMAKE_CURRENT_SOURCE_DIR}/app/src/json/json_parser.c
@@ -171,6 +172,9 @@ target_link_libraries(unittests PRIVATE
 add_compile_definitions(TESTVECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/")
 add_compile_definitions(APP_TESTING=1)
 add_compile_definitions(COMPILE_TEXTUAL=1)
+# Keep the host build on the same limit as app/Makefile, so the tests exercise
+# the configuration that ships.
+add_compile_definitions(CBOR_PARSER_MAX_RECURSIONS=4)
 add_test(NAME unittests COMMAND unittests)
 set_tests_properties(unittests PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 

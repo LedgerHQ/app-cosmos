@@ -141,6 +141,15 @@ static void extractHDPath_HRP(uint32_t rx, uint32_t offset) {
     }
   } else if (hdPath[1] == HDPATH_ETH_1_DEFAULT) {
     THROW(APDU_CODE_INVALID_HD_PATH_COIN_VALUE);
+  } else {
+    // No HRP was provided on the default Cosmos path. Restore the default
+    // "cosmos" HRP explicitly so the flow is self-contained and never reuses
+    // whatever HRP a previous (possibly rejected) request left in the global
+    // buffer.
+    const char default_hrp[] = "cosmos";
+    bech32_hrp_len = sizeof(default_hrp) - 1;
+    MEMZERO(bech32_hrp, sizeof(bech32_hrp));
+    MEMCPY(bech32_hrp, default_hrp, bech32_hrp_len);
   }
 }
 
@@ -212,9 +221,11 @@ __Z_INLINE void handleGetAddrSecp256K1(volatile uint32_t *flags,
   }
 
   if (requireConfirmation) {
-    g_tx_state = TX_STATE_REVIEWING;
     view_review_init(addr_getItem, addr_getNumItems, app_reply_address);
     view_review_show(REVIEW_ADDRESS);
+    // Claim the state only once the review is actually on screen, so a failure
+    // while bringing it up leaves the app idle instead of locked.
+    g_tx_state = TX_STATE_REVIEWING;
     *flags |= IO_ASYNCH_REPLY;
     return;
   }
@@ -276,9 +287,11 @@ __Z_INLINE void handleSign(volatile uint32_t *flags, volatile uint32_t *tx,
 #endif
 
   CHECK_APP_CANARY()
-  g_tx_state = TX_STATE_REVIEWING;
   view_review_init(tx_getItem, tx_getNumItems, app_sign);
   view_review_show(REVIEW_TXN);
+  // Claim the state only once the review is actually on screen, so a failure
+  // while bringing it up leaves the app idle instead of locked.
+  g_tx_state = TX_STATE_REVIEWING;
   *flags |= IO_ASYNCH_REPLY;
 }
 
@@ -332,10 +345,15 @@ void handleApdu(volatile uint32_t *flags, volatile uint32_t *tx, uint32_t rx) {
         break;
       }
       // Reset processing state on real errors. Preserve it on success (the
-      // handler advances the state itself) and on COMMAND_NOT_ALLOWED, where
-      // we are rejecting a concurrent command and the in-flight request must
-      // be allowed to complete.
-      if (sw != APDU_CODE_OK && sw != APDU_CODE_COMMAND_NOT_ALLOWED) {
+      // handler advances the state itself), on COMMAND_NOT_ALLOWED, where we
+      // are rejecting a concurrent command and the in-flight request must be
+      // allowed to complete, and while a review is on screen. In that last
+      // case the pending request still owns hdPath, the address encoding and
+      // the transaction buffer, all of which are read again when the user
+      // approves; only app_sign(), app_reject(), app_reply_address() and
+      // app_reply_error() may hand the state back.
+      if (sw != APDU_CODE_OK && sw != APDU_CODE_COMMAND_NOT_ALLOWED &&
+          g_tx_state != TX_STATE_REVIEWING) {
         g_tx_state = TX_STATE_IDLE;
       }
       G_io_apdu_buffer[*tx] = sw >> 8;
