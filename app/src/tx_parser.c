@@ -24,8 +24,6 @@
 #include "zxmacros.h"
 #include <jsmn.h>
 
-bool extraDepthLevel = false;
-
 // strcat but source does not need to be terminated (a chunk from a bigger
 // string is concatenated) dst_max is measured in bytes including the space for
 // NULL termination src_size does not include NULL termination
@@ -74,6 +72,19 @@ static const key_subst_t value_substitutions[] = {
     {"cosmos-sdk/MsgSetWithdrawAddress", "Withdraw Set Address"},
     {"cosmos-sdk/MsgMultiSend", "Multi Send"},
 
+    // Babylon x/epoching wrapped staking messages. Each nests a standard Cosmos
+    // staking message under a "msg" key (see tx_msg_max_level); the action
+    // shown is the wrapped staking action. Ledger Live emits the amino `type`
+    // as the proto type URL (/babylon.epoching.v1.MsgWrapped*); the chain's
+    // x/epoching amino codec also registers the short legacy names
+    // (epoching/Wrapped*). Accept both forms.
+    {"/babylon.epoching.v1.MsgWrappedDelegate", "Delegate"},
+    {"/babylon.epoching.v1.MsgWrappedUndelegate", "Undelegate"},
+    {"/babylon.epoching.v1.MsgWrappedBeginRedelegate", "Redelegate"},
+    {"epoching/WrappedDelegate", "Delegate"},
+    {"epoching/WrappedUndelegate", "Undelegate"},
+    {"epoching/WrappedBeginRedelegate", "Redelegate"},
+
 };
 
 parser_error_t tx_getToken(uint16_t token_index, char *out_val,
@@ -100,22 +111,20 @@ parser_error_t tx_getToken(uint16_t token_index, char *out_val,
   // empty strings are considered the first page
   *pageCount = 1;
   if (inLen > 0) {
-    for (uint32_t i = 0; i < array_length(value_substitutions); i++) {
-      const char *str1 = (const char *)PIC(value_substitutions[i].str1);
-      const char *str2 = (const char *)PIC(value_substitutions[i].str2);
-      const uint16_t str1Len = strlen(str1);
-      const uint16_t str2Len = strlen(str2);
+    // Only msgs/N/type carries an amino type name. Substituting anywhere else
+    // lets an attacker-chosen memo or address render as an action word.
+    if (is_msg_type_field(parser_tx_obj.tx_json.query.out_key)) {
+      for (uint32_t i = 0; i < array_length(value_substitutions); i++) {
+        const char *str1 = (const char *)PIC(value_substitutions[i].str1);
+        const char *str2 = (const char *)PIC(value_substitutions[i].str2);
+        const uint16_t str1Len = strlen(str1);
+        const uint16_t str2Len = strlen(str2);
 
-      if (inLen == str1Len && strncmp(inValue, str1, str1Len) == 0) {
-        inValue = str2;
-        inLen = str2Len;
-
-        // Extra Depth level for Multisend type
-        extraDepthLevel = false;
-        if (strstr(inValue, "Multi") != NULL) {
-          extraDepthLevel = true;
+        if (inLen == str1Len && strncmp(inValue, str1, str1Len) == 0) {
+          inValue = str2;
+          inLen = str2Len;
+          break;
         }
-        break;
       }
     }
     pageStringExt(out_val, out_val_len, inValue, inLen, pageIdx, pageCount);
@@ -151,6 +160,55 @@ __Z_INLINE void append_key_item(uint16_t token_index) {
 ///////////////////////////
 ///////////////////////////
 ///////////////////////////
+
+__Z_INLINE bool msg_type_equals(const char *type_str, size_t type_len,
+                                const char *name) {
+  return type_len == strlen(name) && strncmp(type_str, name, type_len) == 0;
+}
+
+uint8_t tx_msg_max_level(uint16_t msg_token_index) {
+  // Return the flatten depth needed to display this single message, based on
+  // its own "type". Two shapes nest one object level deeper than the base and
+  // need the extra level:
+  //   - cosmos-sdk/MsgMultiSend (value-wrapped, nesting coins under
+  //     inputs/outputs);
+  //   - Babylon x/epoching wrapped staking messages, which nest a standard
+  //     staking message under a "msg" key. The amino `type` is either the proto
+  //     type URL (/babylon.epoching.v1.MsgWrapped*, as Ledger Live emits) or
+  //     the legacy codec name (epoching/Wrapped*).
+  // The legacy shape carries no "type" field and displays correctly at the base
+  // level.
+  uint16_t type_token_index = 0;
+  if (object_get_value(&parser_tx_obj.tx_json.json, msg_token_index, "type",
+                       &type_token_index) != parser_ok) {
+    return MSG_BASE_FLATTEN_LEVEL;
+  }
+
+  const int16_t start =
+      parser_tx_obj.tx_json.json.tokens[type_token_index].start;
+  const int16_t end = parser_tx_obj.tx_json.json.tokens[type_token_index].end;
+  if (start < 0 || end < start) {
+    return MSG_BASE_FLATTEN_LEVEL;
+  }
+
+  const char *type_str = parser_tx_obj.tx_json.tx + start;
+  const size_t type_len = (size_t)(end - start);
+  if (msg_type_equals(type_str, type_len, "cosmos-sdk/MsgMultiSend")) {
+    return MSG_MULTISEND_FLATTEN_LEVEL;
+  }
+  if (msg_type_equals(type_str, type_len,
+                      "/babylon.epoching.v1.MsgWrappedDelegate") ||
+      msg_type_equals(type_str, type_len,
+                      "/babylon.epoching.v1.MsgWrappedUndelegate") ||
+      msg_type_equals(type_str, type_len,
+                      "/babylon.epoching.v1.MsgWrappedBeginRedelegate") ||
+      msg_type_equals(type_str, type_len, "epoching/WrappedDelegate") ||
+      msg_type_equals(type_str, type_len, "epoching/WrappedUndelegate") ||
+      msg_type_equals(type_str, type_len, "epoching/WrappedBeginRedelegate")) {
+    return MSG_EPOCHING_FLATTEN_LEVEL;
+  }
+  return MSG_BASE_FLATTEN_LEVEL;
+}
 
 parser_error_t tx_traverse_find(uint16_t root_token_index,
                                 uint16_t *ret_value_token_index) {
@@ -247,17 +305,37 @@ parser_error_t tx_traverse_find(uint16_t root_token_index,
     break;
   }
   case JSMN_ARRAY: {
+    // Detect the top-level `msgs` array (uniquely identified by out_key ==
+    // "msgs"; nested arrays are "msgs/value/inputs" etc.). Each element is a
+    // message whose required flatten depth depends on its own type, so set
+    // max_level per message from that type instead of using one depth for the
+    // whole array. This way a batch that mixes message types (for example a
+    // MsgMultiSend together with a MsgSend) enumerates the same set of fields
+    // when counting items as when rendering them. Nested arrays keep the
+    // inherited level unchanged.
+    const bool is_msgs_array =
+        strcmp(parser_tx_obj.tx_json.query.out_key, "msgs") == 0;
+    const uint8_t saved_max_level = parser_tx_obj.tx_json.query.max_level;
+
     for (uint16_t i = 0; i < el_count; ++i) {
       uint16_t element_index;
       CHECK_PARSER_ERR(array_get_nth_element(
           &parser_tx_obj.tx_json.json, root_token_index, i, &element_index))
       CHECK_APP_CANARY()
 
+      if (is_msgs_array) {
+        parser_tx_obj.tx_json.query.max_level = tx_msg_max_level(element_index);
+      }
+
       // When iterating along an array,
       // the level does not change but we need to count the recursion
       parser_tx_obj.tx_json.query.max_depth--;
       err = tx_traverse_find(element_index, ret_value_token_index);
       parser_tx_obj.tx_json.query.max_depth++;
+
+      if (is_msgs_array) {
+        parser_tx_obj.tx_json.query.max_level = saved_max_level;
+      }
 
       CHECK_APP_CANARY()
 

@@ -37,6 +37,44 @@ int8_t is_space(char c) {
   return 0;
 }
 
+// contains_whitespace only inspects the gaps between tokens, so a control byte
+// inside a value is invisible to it. Those bytes are rendered verbatim by the
+// JSON display path, and each consumes a whole line of a review page while
+// costing one character of the budget the page size is derived from, so later
+// bytes can be signed without ever reaching the screen. The canonical compact
+// encoding never emits one.
+//
+// Only string and primitive spans are scanned: an object or array token spans
+// its whole subtree, including the gaps that contains_whitespace owns.
+static parser_error_t contains_control_chars(parsed_json_t *json) {
+  if (json == NULL) {
+    return parser_unexpected_value;
+  }
+
+  for (uint32_t i = 0; i < json->numberOfTokens; i++) {
+    const jsmntok_t *token = &json->tokens[i];
+
+    if (token->type == JSMN_UNDEFINED) {
+      break;
+    }
+    if (token->type != JSMN_STRING && token->type != JSMN_PRIMITIVE) {
+      continue;
+    }
+    if (token->start < 0 || token->end < token->start ||
+        token->end > (int)json->bufferLen) {
+      return parser_unexpected_value;
+    }
+
+    for (int j = token->start; j < token->end; j++) {
+      if ((uint8_t)json->buffer[j] < 0x20) {
+        return parser_unexpected_characters;
+      }
+    }
+  }
+
+  return parser_ok;
+}
+
 parser_error_t contains_whitespace(parsed_json_t *json) {
   if (json == NULL) {
     return parser_unexpected_value;
@@ -186,6 +224,61 @@ parser_error_t dictionaries_sorted(parsed_json_t *json) {
   return parser_ok;
 }
 
+// Closed-world key check: every key directly under the object at
+// object_token_index must appear in allowed_keys. Unknown keys would otherwise
+// be part of the signed bytes without ever being shown to the user.
+static parser_error_t validate_allowed_keys(parsed_json_t *json,
+                                            uint16_t object_token_index,
+                                            const char *const *allowed_keys,
+                                            uint16_t allowed_count) {
+  uint16_t key_count = 0;
+  parser_error_t err =
+      object_get_element_count(json, object_token_index, &key_count);
+  if (err != parser_ok) {
+    return err;
+  }
+
+  for (uint16_t i = 0; i < key_count; i++) {
+    uint16_t key_token_idx = 0;
+    err = object_get_nth_key(json, object_token_index, i, &key_token_idx);
+    if (err != parser_ok) {
+      return err;
+    }
+
+    if (key_token_idx >= json->numberOfTokens) {
+      return parser_unexpected_field;
+    }
+
+    int start = json->tokens[key_token_idx].start;
+    int end = json->tokens[key_token_idx].end;
+    if (start < 0 || end < start || end > (int)json->bufferLen) {
+      return parser_unexpected_field;
+    }
+    int key_len = end - start;
+    const char *key_ptr = json->buffer + start;
+
+    bool found = false;
+    for (uint16_t j = 0; j < allowed_count; j++) {
+      // allowed_keys[j] points to a string literal whose address is fixed at
+      // link time; on a relocated Ledger app it must go through PIC() before it
+      // is dereferenced, otherwise strlen/MEMCMP read a wild pointer and the
+      // app crashes (SIGSEGV). PIC() is a no-op on the host build.
+      const char *allowed_key = (const char *)PIC(allowed_keys[j]);
+      size_t allowed_len = strlen(allowed_key);
+      if ((int)allowed_len == key_len &&
+          MEMCMP(allowed_key, key_ptr, key_len) == 0) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      return parser_unexpected_field;
+    }
+  }
+
+  return parser_ok;
+}
+
 parser_error_t tx_validate(parsed_json_t *json) {
   if (json == NULL) {
     return parser_unexpected_value;
@@ -201,7 +294,12 @@ parser_error_t tx_validate(parsed_json_t *json) {
     return parser_unexpected_characters;
   }
 
-  parser_error_t err = contains_whitespace(json);
+  parser_error_t err = contains_control_chars(json);
+  if (err != parser_ok) {
+    return err;
+  }
+
+  err = contains_whitespace(json);
   if (err != parser_ok) {
     return err;
   }
@@ -224,6 +322,7 @@ parser_error_t tx_validate(parsed_json_t *json) {
   err = object_get_value(json, 0, "fee", &token_index);
   if (err != parser_ok)
     return parser_json_missing_fee;
+  uint16_t fee_token_index = token_index;
 
   err = object_get_value(json, 0, "msgs", &token_index);
   if (err != parser_ok)
@@ -236,6 +335,33 @@ parser_error_t tx_validate(parsed_json_t *json) {
   err = object_get_value(json, 0, "memo", &token_index);
   if (err != parser_ok)
     return parser_json_missing_memo;
+
+  // Closed-world allowlist: anything not explicitly allowed at the SignDoc
+  // root or inside StdFee is rejected so future host-side fields cannot be
+  // signed without the device knowing how to display them.
+  static const char *const allowed_root_keys[] = {
+      "account_number", "chain_id", "fee", "memo",
+      "msgs",           "sequence", "tip", "timeout_height",
+  };
+  err = validate_allowed_keys(json, 0, allowed_root_keys,
+                              sizeof(allowed_root_keys) /
+                                  sizeof(allowed_root_keys[0]));
+  if (err != parser_ok) {
+    return err;
+  }
+
+  static const char *const allowed_fee_keys[] = {
+      "amount",
+      "gas",
+      "granter",
+      "payer",
+  };
+  err = validate_allowed_keys(json, fee_token_index, allowed_fee_keys,
+                              sizeof(allowed_fee_keys) /
+                                  sizeof(allowed_fee_keys[0]));
+  if (err != parser_ok) {
+    return err;
+  }
 
   return parser_ok;
 }

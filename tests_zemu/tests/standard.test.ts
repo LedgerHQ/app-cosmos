@@ -168,6 +168,93 @@ describe('Standard', function () {
     }
   })
 
+  test.concurrent.each(DEVICE_MODELS)('chain config mismatch on the generic Cosmos path', async function (m) {
+    const sim = new Zemu(m.path)
+    try {
+      await sim.start({ ...defaultOptions, model: m.name })
+      const app = new CosmosApp(sim.getTransport())
+
+      // 'inj' is pinned to the Ethereum-style 60' derivation. Asking for it on
+      // the generic 118' path used to take the "always allowed for 118" branch
+      // and hand back a secp256k1 Cosmos address wearing an inj1... prefix --
+      // an address the user cannot receive on, from a request the device
+      // accepted without ever showing that it had substituted the chain.
+      const path = "m/44'/118'/0'/0/0"
+
+      await expect(app.getAddressAndPubKey(path, 'inj')).rejects.toMatchObject({
+        returnCode: 0x698C,
+        errorMessage: 'Chain config not supported'
+      })
+
+      // Same guard on the confirm-on-device entry point: it has to fail before
+      // anything reaches the screen.
+      await expect(app.showAddressAndPubKey(path, 'inj')).rejects.toMatchObject({
+        returnCode: 0x698C,
+        errorMessage: 'Chain config not supported'
+      })
+
+      // The chains the 118' path is actually for keep working.
+      const resp = await app.getAddressAndPubKey(path, 'osmo')
+      expect(resp).toHaveProperty('bech32_address')
+      expect(resp.bech32_address.startsWith('osmo1')).toBe(true)
+      expect(resp.compressed_pk.length).toEqual(33)
+    } finally {
+      await sim.close()
+    }
+  })
+
+  test.concurrent.each(DEVICE_MODELS)('malformed HRP cannot smuggle a known chain onto the Cosmos path', async function (m) {
+    const sim = new Zemu(m.path)
+    try {
+      await sim.start({ ...defaultOptions, model: m.name })
+      const app = new CosmosApp(sim.getTransport())
+
+      const path = "m/44'/118'/0'/0/0"
+
+      // The HRP length is declared out of band, so the bytes in between do not
+      // have to form a C string. 'inj\0X' announced as 5 bytes is not the 'inj'
+      // table entry (the match compares against strlen of the entry), so it used
+      // to reach the generic 118' fallback and be accepted -- and the encoder,
+      // which measures the HRP with strlen, then truncated it back to 'inj'. The
+      // device answered with an inj1... address derived on the Cosmos path,
+      // which is exactly what the chain-config table exists to refuse.
+      await expect(app.getAddressAndPubKey(path, 'inj\u0000X')).rejects.toMatchObject({
+        returnCode: 0x698C,
+        errorMessage: 'Chain config not supported'
+      })
+
+      // Same on the confirm-on-device entry point: nothing may reach the screen.
+      await expect(app.showAddressAndPubKey(path, 'inj\u0000X')).rejects.toMatchObject({
+        returnCode: 0x698C,
+        errorMessage: 'Chain config not supported'
+      })
+
+      // A trailing NUL counted inside the declared length is the same bypass.
+      await expect(app.getAddressAndPubKey(path, 'cosmos\u0000')).rejects.toMatchObject({
+        returnCode: 0x698C,
+        errorMessage: 'Chain config not supported'
+      })
+
+      // bech32 HRPs are printable lowercase ASCII. These were already refused,
+      // but only once the encoder saw them -- two layers below the chain-config
+      // decision, and reported as a generic execution error.
+      for (const hrp of ['INJ', 'CoSmOs', 'in\u0001j', 'in j']) {
+        await expect(app.getAddressAndPubKey(path, hrp)).rejects.toMatchObject({
+          returnCode: 0x698C,
+          errorMessage: 'Chain config not supported'
+        })
+      }
+
+      // The long tail of valid 118' chains is untouched by any of the above.
+      const resp = await app.getAddressAndPubKey(path, 'akash')
+      expect(resp).toHaveProperty('bech32_address')
+      expect(resp.bech32_address.startsWith('akash1')).toBe(true)
+      expect(resp.compressed_pk.length).toEqual(33)
+    } finally {
+      await sim.close()
+    }
+  })
+
   test.concurrent.each(DEVICE_MODELS)('show address HUGE', async function (m) {
     const sim = new Zemu(m.path)
     try {

@@ -43,15 +43,29 @@ static parser_error_t cbor_check_optFields(CborValue *data,
   for (size_t i = 0; i < container->n_field; i++) {
 
     PARSER_ASSERT_OR_ERROR(cbor_value_is_integer(data), parser_unexpected_type)
-    CHECK_CBOR_MAP_ERR(cbor_value_get_int(data, &key))
+    // Checked variant: the plain getter truncates anything wider than an int
+    // instead of failing, so an oversized encoded value could land on one of
+    // the key ids below and be dispatched as that field.
+    CHECK_CBOR_MAP_ERR(cbor_value_get_int_checked(data, &key))
     CHECK_CBOR_MAP_ERR(cbor_value_advance(data))
 
     switch (key) {
+    case TITLE_KEY_ID:
+    case CONTENT_KEY_ID:
+      // Read for real by cbor_check_screen on the display pass; here we only
+      // step over them. Require the same definite-length text string it
+      // expects, so the advance below never has to walk into a container:
+      // cbor_value_advance() recurses once per nesting level.
+      PARSER_ASSERT_OR_ERROR(cbor_value_is_text_string(data) &&
+                                 cbor_value_is_length_known(data),
+                             parser_unexpected_type)
+      break;
+
     case INDENT_KEY_ID: {
       int tmpVal = 0;
       PARSER_ASSERT_OR_ERROR(cbor_value_is_integer(data),
                              parser_unexpected_type)
-      CHECK_CBOR_MAP_ERR(cbor_value_get_int(data, &tmpVal))
+      CHECK_CBOR_MAP_ERR(cbor_value_get_int_checked(data, &tmpVal))
       PARSER_ASSERT_OR_ERROR((tmpVal >= 0 && tmpVal <= UINT8_MAX),
                              parser_unexpected_value)
       container->screen.indent = (uint8_t)tmpVal;
@@ -66,8 +80,10 @@ static parser_error_t cbor_check_optFields(CborValue *data,
       break;
 
     default:
-      container->screen.indent = 0;
-      container->screen.expert = false;
+      // Reject rather than skip: the value of an unrecognised key can be a
+      // container of any depth, and defaulting through it would also clear
+      // options that an earlier key in the same screen already set.
+      return parser_unexpected_field;
     }
     CHECK_CBOR_MAP_ERR(cbor_value_advance(data))
   }
@@ -83,7 +99,7 @@ static parser_error_t cbor_check_screen(CborValue *data,
   int screen_key;
   // check title Key
   PARSER_ASSERT_OR_ERROR(cbor_value_is_integer(data), parser_unexpected_type)
-  CHECK_CBOR_MAP_ERR(cbor_value_get_int(data, &screen_key))
+  CHECK_CBOR_MAP_ERR(cbor_value_get_int_checked(data, &screen_key))
   if (screen_key != TITLE_KEY_ID) {
     PARSER_ASSERT_OR_ERROR(screen_key == CONTENT_KEY_ID, parser_unexpected_type)
 
@@ -112,7 +128,7 @@ static parser_error_t cbor_check_screen(CborValue *data,
 
   // check content Key
   PARSER_ASSERT_OR_ERROR(cbor_value_is_integer(data), parser_unexpected_type)
-  CHECK_CBOR_MAP_ERR(cbor_value_get_int(data, &screen_key))
+  CHECK_CBOR_MAP_ERR(cbor_value_get_int_checked(data, &screen_key))
   PARSER_ASSERT_OR_ERROR(screen_key == CONTENT_KEY_ID, parser_unexpected_type)
 
   CHECK_CBOR_MAP_ERR(cbor_value_advance(data))

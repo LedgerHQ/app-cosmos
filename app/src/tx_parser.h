@@ -30,7 +30,23 @@ extern "C" {
 #endif
 
 #define MAX_RECURSION_DEPTH 6
-extern bool extraDepthLevel;
+
+// Flatten depth (query.max_level) used when enumerating messages inside the
+// `msgs` array. A MsgMultiSend nests its coins one level deeper
+// (value/inputs|outputs/coins) and needs MSG_MULTISEND_FLATTEN_LEVEL; every
+// other message — including the legacy shape that carries no "type" field —
+// renders correctly at MSG_BASE_FLATTEN_LEVEL. The depth is applied per message
+// in tx_traverse_find, derived from each message's own type; get_root_max_level
+// uses the larger value only as a safe ceiling for entering the array.
+#define MSG_BASE_FLATTEN_LEVEL 2
+#define MSG_MULTISEND_FLATTEN_LEVEL 3
+// Babylon x/epoching wrapped staking messages (epoching/Wrapped*) nest a
+// standard staking message under a "msg" key, one object level deeper than the
+// base shape, so they need the same extra flatten level as MsgMultiSend.
+#define MSG_EPOCHING_FLATTEN_LEVEL 3
+
+// Returns the flatten depth a single `msgs` element needs, from its own type.
+uint8_t tx_msg_max_level(uint16_t msg_token_index);
 
 #define INIT_QUERY_CONTEXT(_KEY, _KEY_LEN, _VAL, _VAL_LEN, _PAGE_IDX,          \
                            _MAX_LEVEL)                                         \
@@ -71,7 +87,11 @@ __Z_INLINE bool is_msg_from_field(char *field_name) {
   if (field_name == NULL) {
     return false;
   }
-  return strcmp(field_name, "msgs/value/delegator_address") == 0;
+  // The base staking shape carries the delegator at
+  // msgs/value/delegator_address; Babylon epoching/Wrapped* messages carry it
+  // one level deeper, under the nested "msg" object.
+  return strcmp(field_name, "msgs/value/delegator_address") == 0 ||
+         strcmp(field_name, "msgs/value/msg/delegator_address") == 0;
 }
 
 #ifdef __cplusplus

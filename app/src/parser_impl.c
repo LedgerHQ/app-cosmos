@@ -16,6 +16,7 @@
 
 #include "parser_impl.h"
 #include "cbor.h"
+#include "tx_display.h"
 #include <cbor/cbor_parser_helper.h>
 
 parser_tx_t parser_tx_obj;
@@ -119,6 +120,8 @@ const char *parser_getErrorDescription(parser_error_t err) {
     return "Swap memo not present";
   case parser_swap_wrong_source_coins:
     return "Swap wrong source coins";
+  case parser_swap_multiple_coins:
+    return "Swap multiple coins not allowed";
 
   default:
     return "Unrecognized error code";
@@ -160,7 +163,7 @@ parser_error_t _read_text_tx(parser_context_t *c, parser_tx_t *v) {
   // Make sure we have screen_key set to 1
   int screen_key = 0;
   PARSER_ASSERT_OR_ERROR(cbor_value_is_integer(&it), parser_unexpected_type)
-  CHECK_CBOR_MAP_ERR(cbor_value_get_int(&it, &screen_key))
+  CHECK_CBOR_MAP_ERR(cbor_value_get_int_checked(&it, &screen_key))
   PARSER_ASSERT_OR_ERROR(screen_key == 1, parser_unexpected_type)
   CHECK_CBOR_MAP_ERR(cbor_value_advance(&it))
 
@@ -168,10 +171,13 @@ parser_error_t _read_text_tx(parser_context_t *c, parser_tx_t *v) {
   PARSER_ASSERT_OR_ERROR(cbor_value_is_array(&it), parser_unexpected_type)
 
   CHECK_CBOR_MAP_ERR(cbor_value_get_array_length(&it, &v->tx_text.n_containers))
-  // Limit max fields to 255
-  PARSER_ASSERT_OR_ERROR(
-      (v->tx_text.n_containers > 0 && v->tx_text.n_containers <= UINT8_MAX),
-      parser_unexpected_number_items)
+  // Every screen has to be reachable in review. The review UI addresses items
+  // through an int8_t index, so a document with more screens than
+  // MAX_REVIEW_ITEMS would show a review that stops early while the signature
+  // still covers the whole document. Reject it instead of rendering part of it.
+  PARSER_ASSERT_OR_ERROR((v->tx_text.n_containers > 0 &&
+                          v->tx_text.n_containers <= MAX_REVIEW_ITEMS),
+                         parser_unexpected_number_items)
 
   CborValue containerArray_ptr;
   CborValue data;
@@ -183,6 +189,12 @@ parser_error_t _read_text_tx(parser_context_t *c, parser_tx_t *v) {
   for (size_t i = 0; i < v->tx_text.n_containers; i++) {
     MEMZERO(&container, sizeof(container));
 
+    // cbor_value_get_map_length() documents a map as a precondition and only
+    // guards it with an assert, which production builds compile out. Check the
+    // type here so an element of any other type is a clean parsing error
+    // instead of a length read off a value that has none.
+    PARSER_ASSERT_OR_ERROR(cbor_value_is_map(&containerArray_ptr),
+                           parser_unexpected_type)
     CHECK_CBOR_MAP_ERR(
         cbor_value_get_map_length(&containerArray_ptr, &container.n_field))
     PARSER_ASSERT_OR_ERROR((container.n_field > 0 && container.n_field < 5),

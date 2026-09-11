@@ -62,7 +62,6 @@ parser_error_t parser_parse(parser_context_t *ctx, const uint8_t *data,
     CHECK_PARSER_ERR(_read_json_tx(ctx, tx_obj))
   }
 
-  extraDepthLevel = false;
   return parser_ok;
 }
 
@@ -97,6 +96,12 @@ parser_error_t parser_getNumItems(const parser_context_t *ctx,
 
   *num_items = 0;
   if (ctx->tx_obj->tx_type == tx_textual) {
+    // Parsing already refuses anything above the ceiling; repeat the check
+    // here rather than truncating a size_t into the count the review UI walks.
+    if (ctx->tx_obj->tx_text.n_containers == 0 ||
+        ctx->tx_obj->tx_text.n_containers > MAX_REVIEW_ITEMS) {
+      return parser_unexpected_number_items;
+    }
     *num_items = (uint8_t)ctx->tx_obj->tx_text.n_containers;
     return parser_ok;
   }
@@ -166,6 +171,12 @@ __Z_INLINE bool parser_isAmount(char *key) {
     return true;
   }
 
+  // Babylon x/epoching wrapped staking messages nest the coin one level deeper,
+  // under the "msg" key.
+  if (strcmp(key, "msgs/value/msg/amount") == 0) {
+    return true;
+  }
+
   if (strcmp(key, "tip/amount") == 0) {
     return true;
   }
@@ -212,6 +223,18 @@ __Z_INLINE parser_error_t parser_formatAmountItem(uint16_t amountToken,
 
   *pageCount = 0;
 
+  // Every element of a Coin list must itself be a Coin object. Check that
+  // before counting children, because a scalar leaf reports zero of them just
+  // as an empty container does, and the "Empty" answer below would then
+  // describe a value that is actually there.
+  //
+  // A non-object here is a malformed Coin list, not a shape the app does not
+  // model, so it is refused like the wrong-member-count case below. Callers
+  // send scalars to the generic renderer before reaching this point.
+  if (parser_tx_obj.tx_json.json.tokens[amountToken].type != JSMN_OBJECT) {
+    return parser_unexpected_field;
+  }
+
   uint16_t numElements;
   CHECK_PARSER_ERR(array_get_element_count(&parser_tx_obj.tx_json.json,
                                            amountToken, &numElements))
@@ -223,10 +246,6 @@ __Z_INLINE parser_error_t parser_formatAmountItem(uint16_t amountToken,
   }
 
   if (numElements != AMOUNT_OBJECT_TOKEN_COUNT) {
-    return parser_unexpected_field;
-  }
-
-  if (parser_tx_obj.tx_json.json.tokens[amountToken].type != JSMN_OBJECT) {
     return parser_unexpected_field;
   }
 
@@ -301,7 +320,12 @@ __Z_INLINE parser_error_t parser_formatAmountItem(uint16_t amountToken,
     snprintf(tmpDenom, sizeof(tmpDenom), " %s", COIN_DEFAULT_DENOM_REPR);
   }
 
-  z_str3join(bufferUI, sizeof(bufferUI), "", tmpDenom);
+  // On overflow z_str3join overwrites the buffer with "ERR???" and reports it.
+  // Ignoring that would page the marker onto the review screen while the amount
+  // it replaced stays in what gets signed.
+  if (z_str3join(bufferUI, sizeof(bufferUI), "", tmpDenom) != zxerr_ok) {
+    return parser_unexpected_buffer_end;
+  }
   pageString(outVal, outValLen, bufferUI, pageIdx, pageCount);
 
   return parser_ok;
@@ -318,7 +342,31 @@ __Z_INLINE parser_error_t parser_formatAmount(uint16_t amountToken,
   ZEMU_LOGF(200, "[formatAmount] ------- pageidx %d", pageIdx)
 
   *pageCount = 0;
-  if (parser_tx_obj.tx_json.json.tokens[amountToken].type != JSMN_ARRAY) {
+
+  const jsmntype_t amountType =
+      parser_tx_obj.tx_json.json.tokens[amountToken].type;
+
+  // A Coin is an object, and a Coin list is an array. Anything else is not a
+  // Coin at all, and must not go through the Coin formatter: a scalar leaf
+  // reports zero children exactly as an empty container does, so it came back
+  // as "Empty" while the real value was signed.
+  //
+  // Amounts are recognised by their flattened path alone (parser_isAmount), and
+  // a scalar here is a normal encoding rather than a malformed one. Several
+  // released message types outside cosmos-sdk core carry math.Int at
+  // msgs/value/amount, which amino writes as a bare quoted integer: cosmos/evm
+  // and canto MsgConvertERC20, Kava's MsgConvertERC20ToCoin, Stride's stakeibc
+  // messages and Injective's peggy claims among them.
+  //
+  // Show it the way every other field the app has no special handling for is
+  // shown. Refusing would make amount the one field name whose type can render
+  // a whole message unsignable, and the value the signer sees is the value the
+  // signature covers either way.
+  if (amountType != JSMN_ARRAY && amountType != JSMN_OBJECT) {
+    return tx_getToken(amountToken, outVal, outValLen, pageIdx, pageCount);
+  }
+
+  if (amountType != JSMN_ARRAY) {
     return parser_formatAmountItem(amountToken, outVal, outValLen, pageIdx,
                                    pageCount);
   }
@@ -401,6 +449,13 @@ __Z_INLINE parser_error_t parser_screenPrint(const parser_context_t *ctx,
       container->screen.contentLen > MAX_CONTENT_SIZE) {
     return parser_unexpected_value;
   }
+
+  // Textual leaves the wording of the screens to the host, but a screen with
+  // no content at all shows the user nothing while still costing a page of
+  // their attention. TXSPEC has the host omit empty entries, not send them.
+  if (container->screen.contentLen == 0) {
+    return parser_unexpected_value;
+  }
   MEMZERO(ctx->tx_obj->tx_text.tmpBuffer,
           sizeof(ctx->tx_obj->tx_text.tmpBuffer));
   char *tmp = (char *)ctx->tx_obj->tx_text.tmpBuffer;
@@ -417,7 +472,9 @@ __Z_INLINE parser_error_t parser_screenPrint(const parser_context_t *ctx,
                                             container->screen.contentLen))
 
     for (uint8_t i = 0; i < container->screen.indent; i++) {
-      z_str3join(out, sizeof(out), SCREEN_INDENT, "");
+      if (z_str3join(out, sizeof(out), SCREEN_INDENT, "") != zxerr_ok) {
+        return parser_unexpected_buffer_end;
+      }
     }
 
     snprintf(outKey, outKeyLen, " ");
@@ -443,7 +500,9 @@ __Z_INLINE parser_error_t parser_screenPrint(const parser_context_t *ctx,
     char key[MAX_TITLE_SIZE + 2] = {0};
     MEMCPY(key, TITLE_TRUNCATE_REPLACE, strlen(TITLE_TRUNCATE_REPLACE));
     for (uint8_t i = 0; i < container->screen.indent; i++) {
-      z_str3join(key, sizeof(key), SCREEN_INDENT, "");
+      if (z_str3join(key, sizeof(key), SCREEN_INDENT, "") != zxerr_ok) {
+        return parser_unexpected_buffer_end;
+      }
     }
 
     MEMZERO(ctx->tx_obj->tx_text.tmpBuffer,
@@ -467,7 +526,9 @@ __Z_INLINE parser_error_t parser_screenPrint(const parser_context_t *ctx,
   }
   MEMCPY(key, container->screen.titlePtr, container->screen.titleLen);
   for (uint8_t i = 0; i < container->screen.indent; i++) {
-    z_str3join(key, sizeof(key), SCREEN_INDENT, "");
+    if (z_str3join(key, sizeof(key), SCREEN_INDENT, "") != zxerr_ok) {
+      return parser_unexpected_buffer_end;
+    }
   }
   snprintf(outKey, outKeyLen, "%s", key);
   pageString(outVal, outValLen, out, pageIdx, pageCount);
@@ -496,6 +557,12 @@ __Z_INLINE parser_error_t parser_getScreenInfo(const parser_context_t *ctx,
   }
 
   CborValue data;
+  // Same precondition as in _read_text_tx: cbor_value_get_map_length only
+  // asserts that it was handed a map, and production builds drop that assert.
+  // _read_text_tx has already walked this array, but this runs on the display
+  // path off a freshly initialised parser, so do not lean on that.
+  PARSER_ASSERT_OR_ERROR(cbor_value_is_map(&containerArray_ptr),
+                         parser_unexpected_type)
   CHECK_CBOR_MAP_ERR(
       cbor_value_get_map_length(&containerArray_ptr, &container->n_field))
   CHECK_CBOR_MAP_ERR(cbor_value_enter_container(&containerArray_ptr, &data))
